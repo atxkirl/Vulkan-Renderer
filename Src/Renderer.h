@@ -10,18 +10,26 @@
 
 #include <optional>
 #include <set>
+#include <vector>
+#include <map>
 
 class Renderer
 {
 //-- Variables
 private:
 	GLFWwindow* m_Window;
+	
 	VkInstance m_Instance;
-	VkSurfaceKHR m_Surface;
-
 	VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
 	VkDevice m_LogicalDevice;
-	
+
+	VkSurfaceKHR m_Surface;
+	VkSwapchainKHR m_SwapChain;
+
+	std::vector<VkImage> m_SwapChainImages;
+	VkFormat m_SwapChainImageFormat;
+	VkExtent2D m_SwapChainExtents;
+
 	VkQueue m_GraphicsQueue;
 	VkQueue m_PresentQueue;
 
@@ -37,6 +45,12 @@ private:
 				m_PresentFamily.has_value();
 		}
 	};
+	struct SwapChainSupportDetails
+	{
+		VkSurfaceCapabilitiesKHR m_Capabilities;
+		std::vector<VkSurfaceFormatKHR> m_Formats;
+		std::vector<VkPresentModeKHR> m_PresentModes;
+	};
 
 
 //-- Functions
@@ -51,13 +65,21 @@ private:
 
 	void CheckExtensionSupport();
 	bool CheckValidationLayerSupport();
+	bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
 	void CreateVulkanInstance();
 	void SelectPhysicalGPU();
 	void CreateLogicalDevice();
 	void CreateSurface();
+	void CreateSwapChain();
 
 	bool IsDeviceSuitable(VkPhysicalDevice device);
 	int RateDevice(VkPhysicalDevice device);
+
+	VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
+	VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
+	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+
 	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
+	SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
 };
