@@ -91,10 +91,10 @@ void Renderer::CheckExtensionSupport()
 	std::vector<VkExtensionProperties> extensions(extensionCount);
 	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
 	
-	std::cout << "Available Vulkan extensions: \n";
+	std::cout << "\t" << "Available Vulkan extensions: \n";
 	for (const auto& extension : extensions)
 	{
-		std::cout << "\t" << extension.extensionName << std::endl;
+		std::cout << "\t\t" << extension.extensionName << std::endl;
 	}
 }
 
@@ -106,7 +106,7 @@ bool Renderer::CheckValidationLayerSupport()
 	std::vector<VkLayerProperties> availableLayers(layerCount);
 	vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
 
-	std::cout << "Available Vulkan validation layers: \n";
+	std::cout << "\t" << "Available Vulkan validation layers: \n";
 	for (const char* layerName : ValidationLayers)
 	{
 		bool found = false;
@@ -116,7 +116,7 @@ bool Renderer::CheckValidationLayerSupport()
 			{
 				found = true;
 
-				std::cout << "\t" << layerProperties.layerName << std::endl;
+				std::cout << "\t\t" << layerProperties.layerName << std::endl;
 				break;
 			}
 		}
@@ -174,7 +174,19 @@ void Renderer::SelectPhysicalGPU()
 		deviceCandidates.insert({ score, device });
 	}
 	if (deviceCandidates.rbegin()->first > 0)
+	{
 		m_PhysicalDevice = deviceCandidates.rbegin()->second;
+
+#ifdef _DEBUG
+		VkPhysicalDeviceProperties deviceProperties;
+		vkGetPhysicalDeviceProperties(m_PhysicalDevice, &deviceProperties);
+
+		std::cout << "\t" << "Selected GPU:\n";
+		std::cout << "\t\t" << "GPU Name: " << deviceProperties.deviceName << std::endl;
+		std::cout << "\t\t" << "GPU Vendor ID: " << deviceProperties.vendorID << std::endl;
+		std::cout << "\t\t" << "GPU Device ID: " << deviceProperties.deviceID << std::endl;
+#endif
+	}
 	else
 		throw std::runtime_error("Failed to find suitable GPU!");
 }
@@ -306,6 +318,36 @@ void Renderer::CreateSwapChain()
 
 	m_SwapChainImageFormat = surfaceFormat.format;
 	m_SwapChainExtents = extents;
+}
+
+void Renderer::CreateImageViews()
+{
+	m_SwapChainImageViews.resize(m_SwapChainImages.size());
+
+	for (size_t i = 0; i < m_SwapChainImages.size(); ++i)
+	{
+		VkImageViewCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = m_SwapChainImages[i];
+		// Define texture type. (1D, 2D or 3D/Cubemap) and image format.
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = m_SwapChainImageFormat;
+		// Set default color channel mapping:
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		// Define image's ppurpose and which parts of image to be accessed.
+		// - For now will be color target without any mipmapping or multiple layers:
+		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+
+		if (vkCreateImageView(m_LogicalDevice, &createInfo, nullptr, &m_SwapChainImageViews[i]) != VK_SUCCESS)
+			throw std::runtime_error("Failed to create image views at index " + i);
+	}
 }
 
 int Renderer::RateDevice(VkPhysicalDevice device)
@@ -455,6 +497,9 @@ void Renderer::Update()
 void Renderer::Shutdown()
 {
 	std::cout << "Shutting down Renderer!\n";
+
+	for (auto imageView : m_SwapChainImageViews)
+		vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
 
 	vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
 	vkDestroyDevice(m_LogicalDevice, nullptr);

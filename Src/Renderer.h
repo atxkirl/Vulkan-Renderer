@@ -27,6 +27,7 @@ private:
 	VkSwapchainKHR m_SwapChain;
 
 	std::vector<VkImage> m_SwapChainImages;
+	std::vector<VkImageView> m_SwapChainImageViews;
 	VkFormat m_SwapChainImageFormat;
 	VkExtent2D m_SwapChainExtents;
 
@@ -72,6 +73,7 @@ private:
 	void CreateLogicalDevice();
 	void CreateSurface();
 	void CreateSwapChain();
+	void CreateImageViews();
 
 	bool IsDeviceSuitable(VkPhysicalDevice device);
 	int RateDevice(VkPhysicalDevice device);
