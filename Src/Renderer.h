@@ -61,27 +61,37 @@ public:
 	void Shutdown();
 
 private:
+	//-- Main API initialization.
 	void InitGLFW();
 	void InitVulkan();
 
+	//-- Extension checks.
 	void CheckExtensionSupport();
 	bool CheckValidationLayerSupport();
 	bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
+	//-- Helper checks.
+	bool IsDeviceSuitable(VkPhysicalDevice device);
+	int RateDevice(VkPhysicalDevice device);
+
+	//-- Vulkan initialization.
 	void CreateVulkanInstance();
 	void SelectPhysicalGPU();
 	void CreateLogicalDevice();
 	void CreateSurface();
 	void CreateSwapChain();
 	void CreateImageViews();
+	void CreateGraphicsPipeline();
 
-	bool IsDeviceSuitable(VkPhysicalDevice device);
-	int RateDevice(VkPhysicalDevice device);
-
+	//-- Select swap chain settings.
 	VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
 	VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
 	VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
 
+	//-- GPU querying.
 	QueueFamilyIndices FindQueueFamilies(VkPhysicalDevice device);
 	SwapChainSupportDetails QuerySwapChainSupport(VkPhysicalDevice device);
+
+	//-- Grahics Pipeline.
+	VkShaderModule CreateShaderModule(std::vector<char>& shaderCode);
 };

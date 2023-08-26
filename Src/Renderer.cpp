@@ -2,6 +2,9 @@
 #include <iostream>
 #include <algorithm>
 
+#include "FileLoader.h"
+
+
 const uint32_t WIN_WIDTH = 800;
 const uint32_t WIN_HEIGHT = 600;
 
@@ -19,6 +22,44 @@ const std::vector<const char*> DeviceExtensions =
 {
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
+
+
+//-- Public Functions
+void Renderer::Initialize()
+{
+	std::cout << "Initializing Renderer!\n";
+
+	InitGLFW();
+	InitVulkan();
+}
+
+void Renderer::Update()
+{
+	std::cout << "Starting Renderer Update loop!\n";
+
+	while (!glfwWindowShouldClose(m_Window))
+	{
+		glfwPollEvents();
+	}
+}
+
+void Renderer::Shutdown()
+{
+	std::cout << "Shutting down Renderer!\n";
+
+	for (auto imageView : m_SwapChainImageViews)
+		vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
+
+	vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
+	vkDestroyDevice(m_LogicalDevice, nullptr);
+
+	vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+	vkDestroyInstance(m_Instance, nullptr);
+
+	glfwDestroyWindow(m_Window);
+	glfwTerminate();
+}
+
 
 //-- Private Functions
 void Renderer::InitGLFW()
@@ -38,6 +79,8 @@ void Renderer::InitVulkan()
 	SelectPhysicalGPU();
 	CreateLogicalDevice();
 	CreateSwapChain();
+
+	CreateGraphicsPipeline();
 }
 
 void Renderer::CreateVulkanInstance()
@@ -350,6 +393,41 @@ void Renderer::CreateImageViews()
 	}
 }
 
+void Renderer::CreateGraphicsPipeline()
+{
+	auto vertShaderCode = FileLoader::ReadFile("Shaders/output/vert.spv");
+	auto fragShaderCode = FileLoader::ReadFile("Shaders/output/frag.spv");
+
+#ifdef _DEBUG
+	std::cout << "\t" << "Vert shader byte size: " << vertShaderCode.size() << std::endl;
+	std::cout << "\t" << "Frag shader byte size: " << fragShaderCode.size() << std::endl;
+#endif
+
+	VkShaderModule vertShaderModule = CreateShaderModule(vertShaderCode);
+	VkShaderModule fragShaderModule = CreateShaderModule(fragShaderCode);
+
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertShaderStageInfo.module = vertShaderModule;
+	vertShaderStageInfo.pName = "main"; // Name of the entrypoint function in the shader.
+
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragShaderStageInfo.module = fragShaderModule;
+	fragShaderStageInfo.pName = "main"; // Name of the entrypoint function in the shader.
+
+	VkPipelineShaderStageCreateInfo shaderStages[] =
+	{
+		vertShaderStageInfo,
+		fragShaderStageInfo
+	};
+
+	vkDestroyShaderModule(m_LogicalDevice, vertShaderModule, nullptr);
+	vkDestroyShaderModule(m_LogicalDevice, fragShaderModule, nullptr);
+}
+
 int Renderer::RateDevice(VkPhysicalDevice device)
 {
 	int score = 0;
@@ -474,39 +552,16 @@ Renderer::SwapChainSupportDetails Renderer::QuerySwapChainSupport(VkPhysicalDevi
 	return details;
 }
 
-
-//-- Public Functions
-void Renderer::Initialize()
+VkShaderModule Renderer::CreateShaderModule(std::vector<char>& shaderCode)
 {
-	std::cout << "Initializing Renderer!\n";
+	VkShaderModuleCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.codeSize = shaderCode.size();
+	createInfo.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data());
 
-	InitGLFW();
-	InitVulkan();
-}
+	VkShaderModule shaderModule;
+	if (vkCreateShaderModule(m_LogicalDevice, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create shader module!");
 
-void Renderer::Update()
-{
-	std::cout << "Starting Renderer Update loop!\n";
-
-	while (!glfwWindowShouldClose(m_Window))
-	{
-		glfwPollEvents();
-	}
-}
-
-void Renderer::Shutdown()
-{
-	std::cout << "Shutting down Renderer!\n";
-
-	for (auto imageView : m_SwapChainImageViews)
-		vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
-
-	vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
-	vkDestroyDevice(m_LogicalDevice, nullptr);
-
-	vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
-	vkDestroyInstance(m_Instance, nullptr);
-
-	glfwDestroyWindow(m_Window);
-	glfwTerminate();
+	return shaderModule;
 }
