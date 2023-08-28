@@ -42,6 +42,8 @@ void Renderer::Update()
 		glfwPollEvents();
 		DrawFrame();
 	}
+
+	vkDeviceWaitIdle(m_LogicalDevice);
 }
 
 void Renderer::Shutdown()
