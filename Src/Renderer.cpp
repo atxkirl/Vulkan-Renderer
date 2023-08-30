@@ -5,8 +5,9 @@
 #include "FileLoader.h"
 
 
-const uint32_t WIN_WIDTH = 800;
-const uint32_t WIN_HEIGHT = 600;
+const uint32_t WIN_WIDTH = 800;		// Window width.
+const uint32_t WIN_HEIGHT = 600;	// Window height.
+const int MAX_FRAMES_IN_FLIGHT = 2;	// Max number of frames that should be processed concurrently. (AKA max number of pre-rendered frames.)
 
 #ifdef _DEBUG
 const bool EnableValidationLayers = true;
@@ -24,13 +25,15 @@ const std::vector<const char*> DeviceExtensions =
 };
 
 
-//-- Public Functions
+///- Public Functions
 void Renderer::Initialize()
 {
 	std::cout << "Initializing Renderer!\n";
 
 	InitGLFW();
 	InitVulkan();
+
+	m_CurrentFrame = 0;
 }
 
 void Renderer::Update()
@@ -50,34 +53,48 @@ void Renderer::Shutdown()
 {
 	std::cout << "Shutting down Renderer!\n";
 
-	vkDestroySemaphore(m_LogicalDevice, m_ImageAvailableSemaphore, nullptr);
-	vkDestroySemaphore(m_LogicalDevice, m_RenderFinishedSemaphore, nullptr);
-	vkDestroyFence(m_LogicalDevice, m_InFlightFence, nullptr);
+	// Cleanup frame semaphores and fences.
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	{
+		vkDestroySemaphore(m_LogicalDevice, m_ImageAvailableSemaphores[i], nullptr);
+		vkDestroySemaphore(m_LogicalDevice, m_RenderFinishedSemaphores[i], nullptr);
+		vkDestroyFence(m_LogicalDevice, m_InFlightFences[i], nullptr);
+	}
 
+	// Cleanup command pool.
 	vkDestroyCommandPool(m_LogicalDevice, m_CommandPool, nullptr);
 
+	// Cleanup swap-chain frame buffers.
 	for (auto frameBuffer : m_SwapChainFramebuffers)
 		vkDestroyFramebuffer(m_LogicalDevice, frameBuffer, nullptr);
 
+	// Cleanup render pipelines.
 	vkDestroyPipeline(m_LogicalDevice, m_GraphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(m_LogicalDevice, m_PipelineLayout, nullptr);
 	vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, nullptr);
 
+	// Cleanup swap-chain image views.
 	for (auto imageView : m_SwapChainImageViews)
 		vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
 
+	// Cleanup swap-chain.
 	vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
+	// Cleanup vulkan logical device.
 	vkDestroyDevice(m_LogicalDevice, nullptr);
 
+	// Cleanup vulkan surface.
 	vkDestroySurfaceKHR(m_Instance, m_Surface, nullptr);
+	// Cleanup vulkan instance.
 	vkDestroyInstance(m_Instance, nullptr);
 
+	// Cleanup GLFW.
 	glfwDestroyWindow(m_Window);
 	glfwTerminate();
 }
 
 
-//-- Private Functions
+///- Private Functions
+//-- Main API Initializations.
 void Renderer::InitGLFW()
 {
 	glfwInit();
@@ -103,61 +120,20 @@ void Renderer::InitVulkan()
 
 	CreateFramebuffers();
 	CreateCommandPool();
-	CreateCommandBuffer();
+	CreateCommandBuffers();
 	CreateSyncObjects();
 }
 
-void Renderer::CreateVulkanInstance()
-{
-	CheckExtensionSupport();
-	if (EnableValidationLayers && !CheckValidationLayerSupport())
-	{
-		throw std::runtime_error("Vulkan validation layers requested, but not available!");
-	}
-
-	VkApplicationInfo appInfo{};
-	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	appInfo.pApplicationName = "Vulkan Renderer";
-	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.pEngineName = "MEOW";
-	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-	appInfo.apiVersion = VK_API_VERSION_1_0;
-
-	VkInstanceCreateInfo createInfo{};
-	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	createInfo.pApplicationInfo = &appInfo;
-	createInfo.enabledLayerCount = 0;
-	if (EnableValidationLayers)
-	{
-		createInfo.enabledLayerCount = static_cast<uint32_t>(ValidationLayers.size());
-		createInfo.ppEnabledLayerNames = ValidationLayers.data();
-	}
-	else
-	{
-		createInfo.enabledLayerCount = 0;
-		createInfo.ppEnabledLayerNames = nullptr;
-	}
-
-	uint32_t glfwExtensionCount = 0;
-	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-	createInfo.enabledExtensionCount = glfwExtensionCount;
-	createInfo.ppEnabledExtensionNames = glfwExtensions;
-	createInfo.enabledLayerCount = 0;
-
-	if (vkCreateInstance(&createInfo, nullptr, &m_Instance) != VK_SUCCESS)
-		throw std::runtime_error("Failed to create Vulkan instance!");
-}
-
+//-- Extension Checks.
 void Renderer::CheckExtensionSupport()
 {
 	// Print out valid extensions for the selected GPU.
 	uint32_t extensionCount = 0;
 	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-	
+
 	std::vector<VkExtensionProperties> extensions(extensionCount);
 	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, extensions.data());
-	
+
 	std::cout << "\t" << "Available Vulkan extensions: \n";
 	for (const auto& extension : extensions)
 	{
@@ -222,6 +198,88 @@ bool Renderer::CheckDeviceExtensionSupport(VkPhysicalDevice device)
 	}
 
 	return true;
+}
+
+//-- GPU Selection Helpers.
+bool Renderer::IsDeviceSuitable(VkPhysicalDevice device)
+{
+	QueueFamilyIndices indices = FindQueueFamilies(device);
+	bool extensionsSupported = CheckDeviceExtensionSupport(device);
+	bool swapChainAdequate = false;
+	if (extensionsSupported)
+	{
+		SwapChainSupportDetails details = QuerySwapChainSupport(device);
+		swapChainAdequate = !details.m_Formats.empty() && !details.m_PresentModes.empty();
+	}
+
+	return
+		indices.IsComplete() &&
+		extensionsSupported &&
+		swapChainAdequate;
+}
+
+int Renderer::RateDevice(VkPhysicalDevice device)
+{
+	int score = 0;
+	VkPhysicalDeviceProperties deviceProperties;
+	VkPhysicalDeviceFeatures deviceFeatures;
+	vkGetPhysicalDeviceProperties(device, &deviceProperties);
+	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+	// GPU *must* support geometry shaders!
+	if (!deviceFeatures.geometryShader)
+		return 0;
+
+	// Discrete GPUs first and foremost.
+	if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+		score += 1000;
+	// Larger maximum texture size is better.
+	score += deviceProperties.limits.maxImageDimension2D;
+
+	return score;
+}
+
+//-- Vulkan Initialization.
+void Renderer::CreateVulkanInstance()
+{
+	CheckExtensionSupport();
+	if (EnableValidationLayers && !CheckValidationLayerSupport())
+	{
+		throw std::runtime_error("Vulkan validation layers requested, but not available!");
+	}
+
+	VkApplicationInfo appInfo{};
+	appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	appInfo.pApplicationName = "Vulkan Renderer";
+	appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
+	appInfo.pEngineName = "MEOW";
+	appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+	appInfo.apiVersion = VK_API_VERSION_1_0;
+
+	VkInstanceCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	createInfo.pApplicationInfo = &appInfo;
+	createInfo.enabledLayerCount = 0;
+	if (EnableValidationLayers)
+	{
+		createInfo.enabledLayerCount = static_cast<uint32_t>(ValidationLayers.size());
+		createInfo.ppEnabledLayerNames = ValidationLayers.data();
+	}
+	else
+	{
+		createInfo.enabledLayerCount = 0;
+		createInfo.ppEnabledLayerNames = nullptr;
+	}
+
+	uint32_t glfwExtensionCount = 0;
+	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+	createInfo.enabledExtensionCount = glfwExtensionCount;
+	createInfo.ppEnabledExtensionNames = glfwExtensions;
+	createInfo.enabledLayerCount = 0;
+
+	if (vkCreateInstance(&createInfo, nullptr, &m_Instance) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create Vulkan instance!");
 }
 
 void Renderer::SelectPhysicalGPU()
@@ -302,23 +360,6 @@ void Renderer::CreateLogicalDevice()
 	// Retrieve handles to device queues:
 	vkGetDeviceQueue(m_LogicalDevice, indices.m_GraphicsFamily.value(), 0, &m_GraphicsQueue);
 	vkGetDeviceQueue(m_LogicalDevice, indices.m_PresentFamily.value(), 0, &m_PresentQueue);
-}
-
-bool Renderer::IsDeviceSuitable(VkPhysicalDevice device)
-{
-	QueueFamilyIndices indices = FindQueueFamilies(device);
-	bool extensionsSupported = CheckDeviceExtensionSupport(device);
-	bool swapChainAdequate = false;
-	if (extensionsSupported)
-	{
-		SwapChainSupportDetails details = QuerySwapChainSupport(device);
-		swapChainAdequate = !details.m_Formats.empty() && !details.m_PresentModes.empty();
-	}
-
-	return 
-		indices.IsComplete() &&
-		extensionsSupported &&
-		swapChainAdequate;
 }
 
 void Renderer::CreateSurface()
@@ -680,36 +721,45 @@ void Renderer::CreateCommandPool()
 		throw std::runtime_error("Failed to create command pool!");
 }
 
-void Renderer::CreateCommandBuffer()
+void Renderer::CreateCommandBuffers()
 {
+	m_CommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
 	VkCommandBufferAllocateInfo allocateInfo{};
 	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
 	allocateInfo.commandPool = m_CommandPool;
 	allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-	allocateInfo.commandBufferCount = 1;
+	allocateInfo.commandBufferCount = static_cast<uint32_t>(m_CommandBuffers.size());
 
-	if (vkAllocateCommandBuffers(m_LogicalDevice, &allocateInfo, &m_CommandBuffer) != VK_SUCCESS)
+	if (vkAllocateCommandBuffers(m_LogicalDevice, &allocateInfo, m_CommandBuffers.data()) != VK_SUCCESS)
 		throw std::runtime_error("Failed to allocate command buffers!");
 }
 
 void Renderer::CreateSyncObjects()
 {
+	m_ImageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	m_RenderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	m_InFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
 	VkSemaphoreCreateInfo semaphoreInfo{};
 	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-	if (vkCreateSemaphore(m_LogicalDevice, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphore) != VK_SUCCESS)
-		throw std::runtime_error("Failed to create semaphore for 'image available'!");
-	if (vkCreateSemaphore(m_LogicalDevice, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphore) != VK_SUCCESS)
-		throw std::runtime_error("Failed to create semaphore for 'render finished'!");
-	
 	VkFenceCreateInfo fenceInfo{};
 	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
-	
-	if (vkCreateFence(m_LogicalDevice, &fenceInfo, nullptr, &m_InFlightFence) != VK_SUCCESS)
-		throw std::runtime_error("Failed to create fence for 'image in flight'!");
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	{
+		if (vkCreateSemaphore(m_LogicalDevice, &semaphoreInfo, nullptr, &m_ImageAvailableSemaphores[i]) != VK_SUCCESS)
+			throw std::runtime_error("Failed to create semaphore for 'image available' for a frame!");
+		if (vkCreateSemaphore(m_LogicalDevice, &semaphoreInfo, nullptr, &m_RenderFinishedSemaphores[i]) != VK_SUCCESS)
+			throw std::runtime_error("Failed to create semaphore for 'render finished' for a frame!");
+		if (vkCreateFence(m_LogicalDevice, &fenceInfo, nullptr, &m_InFlightFences[i]) != VK_SUCCESS)
+			throw std::runtime_error("Failed to create fence for 'image in flight' for a frame!");
+	}
 }
 
+//-- Vulkan Rendering.
 void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
 	VkCommandBufferBeginInfo beginInfo{};
@@ -756,21 +806,21 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 void Renderer::DrawFrame()
 {
 	//-- Wait and Reset synch objects.
-	vkWaitForFences(m_LogicalDevice, 1, &m_InFlightFence, VK_TRUE, UINT64_MAX);
-	vkResetFences(m_LogicalDevice, 1, &m_InFlightFence);
+	vkWaitForFences(m_LogicalDevice, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
+	vkResetFences(m_LogicalDevice, 1, &m_InFlightFences[m_CurrentFrame]);
 
 	//-- Acquire image from swap chain.
 	uint32_t imageIndex;
-	vkAcquireNextImageKHR(m_LogicalDevice, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphore, m_InFlightFence, &imageIndex);
+	vkAcquireNextImageKHR(m_LogicalDevice, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], m_InFlightFences[m_CurrentFrame], &imageIndex);
 
 	//-- Recording the command buffer.
-	vkResetCommandBuffer(m_CommandBuffer, 0);
-	RecordCommandBuffer(m_CommandBuffer, imageIndex);
+	vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
+	RecordCommandBuffer(m_CommandBuffers[m_CurrentFrame], imageIndex);
 
 	//-- Submit command buffer.
 	VkSemaphore waitSemaphores[] =
 	{
-		m_ImageAvailableSemaphore
+		m_ImageAvailableSemaphores[m_CurrentFrame]
 	};
 	VkPipelineStageFlags waitStages[] =
 	{
@@ -778,7 +828,7 @@ void Renderer::DrawFrame()
 	};
 	VkSemaphore signalSemaphores[] =
 	{
-		m_RenderFinishedSemaphore
+		m_RenderFinishedSemaphores[m_CurrentFrame]
 	};
 
 	VkSubmitInfo submitInfo{};
@@ -787,11 +837,11 @@ void Renderer::DrawFrame()
 	submitInfo.pWaitSemaphores = waitSemaphores;
 	submitInfo.pWaitDstStageMask = waitStages;
 	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &m_CommandBuffer;
+	submitInfo.pCommandBuffers = &m_CommandBuffers[m_CurrentFrame];
 	submitInfo.signalSemaphoreCount = 1;
 	submitInfo.pSignalSemaphores = signalSemaphores;
 
-	if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlightFence) != VK_SUCCESS)
+	if (vkQueueSubmit(m_GraphicsQueue, 1, &submitInfo, m_InFlightFences[m_CurrentFrame]) != VK_SUCCESS)
 		throw std::runtime_error("Failed to submit draw command buffer!");
 
 	//-- Presentation
@@ -810,29 +860,12 @@ void Renderer::DrawFrame()
 	presentInfo.pResults = nullptr;
 
 	vkQueuePresentKHR(m_PresentQueue, &presentInfo);
+
+	// Increment frame counter.
+	m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-int Renderer::RateDevice(VkPhysicalDevice device)
-{
-	int score = 0;
-	VkPhysicalDeviceProperties deviceProperties;
-	VkPhysicalDeviceFeatures deviceFeatures;
-	vkGetPhysicalDeviceProperties(device, &deviceProperties);
-	vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
-
-	// GPU *must* support geometry shaders!
-	if (!deviceFeatures.geometryShader)
-		return 0;
-
-	// Discrete GPUs first and foremost.
-	if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-		score += 1000;
-	// Larger maximum texture size is better.
-	score += deviceProperties.limits.maxImageDimension2D;
-
-	return score;
-}
-
+//-- Swap-Chain Settings.
 VkSurfaceFormatKHR Renderer::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
 {
 	for (const auto& availableFormat : availableFormats)
@@ -876,6 +909,7 @@ VkExtent2D Renderer::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabiliti
 	return actualExtents;
 }
 
+//-- GPU Querying.
 Renderer::QueueFamilyIndices Renderer::FindQueueFamilies(VkPhysicalDevice device)
 {
 	QueueFamilyIndices indices;
@@ -936,6 +970,7 @@ Renderer::SwapChainSupportDetails Renderer::QuerySwapChainSupport(VkPhysicalDevi
 	return details;
 }
 
+//-- Graphics Pipeline.
 VkShaderModule Renderer::CreateShaderModule(std::vector<char>& shaderCode)
 {
 	VkShaderModuleCreateInfo createInfo{};

@@ -62,11 +62,11 @@ private:
 	VkPipeline m_GraphicsPipeline;
 
 	VkCommandPool m_CommandPool;
-	VkCommandBuffer m_CommandBuffer;
-
-	VkSemaphore m_ImageAvailableSemaphore;
-	VkSemaphore m_RenderFinishedSemaphore;
-	VkFence m_InFlightFence;
+	std::vector<VkCommandBuffer> m_CommandBuffers;			// Command buffers for each frame.
+	std::vector<VkSemaphore> m_ImageAvailableSemaphores;	// Semaphores for each frame.
+	std::vector<VkSemaphore> m_RenderFinishedSemaphores;	// Semaphores for each frame.
+	std::vector<VkFence> m_InFlightFences;					// Fences for each frame.
+	uint32_t m_CurrentFrame;								// Counter for the current frame. Between 0 and MAX_FRAMES_IN_FLIGHT.
 
 
 //-- Functions
@@ -85,7 +85,7 @@ private:
 	bool CheckValidationLayerSupport();
 	bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
-	//-- Helper checks.
+	//-- GPU Selection Helpers.
 	bool IsDeviceSuitable(VkPhysicalDevice device);
 	int RateDevice(VkPhysicalDevice device);
 
@@ -100,7 +100,7 @@ private:
 	void CreateGraphicsPipeline();
 	void CreateFramebuffers();
 	void CreateCommandPool();
-	void CreateCommandBuffer();
+	void CreateCommandBuffers();
 	void CreateSyncObjects();
 
 	// Vulkan rendering!
