@@ -25,6 +25,14 @@ const std::vector<const char*> DeviceExtensions =
 };
 
 
+///- Static Functions
+static void FrameBufferResizedCallback(GLFWwindow* window, int width, int height)
+{
+	auto app = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
+	app->FlagFrameBufferResized();
+}
+
+
 ///- Public Functions
 void Renderer::Initialize()
 {
@@ -32,8 +40,6 @@ void Renderer::Initialize()
 
 	InitGLFW();
 	InitVulkan();
-
-	m_CurrentFrame = 0;
 }
 
 void Renderer::Update()
@@ -64,21 +70,14 @@ void Renderer::Shutdown()
 	// Cleanup command pool.
 	vkDestroyCommandPool(m_LogicalDevice, m_CommandPool, nullptr);
 
-	// Cleanup swap-chain frame buffers.
-	for (auto frameBuffer : m_SwapChainFramebuffers)
-		vkDestroyFramebuffer(m_LogicalDevice, frameBuffer, nullptr);
-
 	// Cleanup render pipelines.
 	vkDestroyPipeline(m_LogicalDevice, m_GraphicsPipeline, nullptr);
 	vkDestroyPipelineLayout(m_LogicalDevice, m_PipelineLayout, nullptr);
 	vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, nullptr);
 
-	// Cleanup swap-chain image views.
-	for (auto imageView : m_SwapChainImageViews)
-		vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
+	// Cleanup swap-chains.
+	DestroySwapChain();
 
-	// Cleanup swap-chain.
-	vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
 	// Cleanup vulkan logical device.
 	vkDestroyDevice(m_LogicalDevice, nullptr);
 
@@ -92,6 +91,15 @@ void Renderer::Shutdown()
 	glfwTerminate();
 }
 
+void Renderer::FlagFrameBufferResized()
+{
+#ifdef _DEBUG
+	std::cout << "Frame buffer resized!" << std::endl;
+#endif
+
+	m_FrameBufferResized = true;
+}
+
 
 ///- Private Functions
 //-- Main API Initializations.
@@ -100,9 +108,12 @@ void Renderer::InitGLFW()
 	glfwInit();
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+	glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
 	m_Window = glfwCreateWindow(WIN_WIDTH, WIN_HEIGHT, "Vulkan Renderer", nullptr, nullptr);
+
+	glfwSetWindowUserPointer(m_Window, this);
+	glfwSetFramebufferSizeCallback(m_Window, FrameBufferResizedCallback);
 }
 
 void Renderer::InitVulkan()
@@ -414,8 +425,8 @@ void Renderer::CreateSwapChain()
 	createInfo.preTransform = details.m_Capabilities.currentTransform; // Can use to specify a global pre-transform for all images in the swap chain, for like a global 90deg rotation or smth.
 	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 	createInfo.presentMode = presentMode;
-	createInfo.clipped = VK_TRUE; // Ignore pixels that are obscured by another window.
-	createInfo.oldSwapchain = VK_NULL_HANDLE; ///!!IMPORTANT!! Need to specify reference to old swap chain, if recreating a new one due to window resize.
+	createInfo.clipped = VK_TRUE;				// Ignore pixels that are obscured by another window.
+	createInfo.oldSwapchain = VK_NULL_HANDLE;	// Should store the old swapchain handle here, if swapchain is being recreated.
 
 	if (vkCreateSwapchainKHR(m_LogicalDevice, &createInfo, nullptr, &m_SwapChain) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create swap chain!");
@@ -805,13 +816,25 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
 void Renderer::DrawFrame()
 {
-	//-- Wait and Reset synch objects.
+	//-- Wait for sync fence.
 	vkWaitForFences(m_LogicalDevice, 1, &m_InFlightFences[m_CurrentFrame], VK_TRUE, UINT64_MAX);
-	vkResetFences(m_LogicalDevice, 1, &m_InFlightFences[m_CurrentFrame]);
 
 	//-- Acquire image from swap chain.
 	uint32_t imageIndex;
-	vkAcquireNextImageKHR(m_LogicalDevice, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], m_InFlightFences[m_CurrentFrame], &imageIndex);
+	VkResult result = vkAcquireNextImageKHR(m_LogicalDevice, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], m_InFlightFences[m_CurrentFrame], &imageIndex);
+
+	//-- Check if swap chain is out of date.
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_FrameBufferResized)
+	{
+		m_FrameBufferResized = !m_FrameBufferResized;
+		RecreateSwapChain();
+		return;
+	}
+	else if (result != VK_SUCCESS)
+		throw std::runtime_error("Failed to acquire swap chain image!");
+
+	//-- Reset fence if image acquired.
+	vkResetFences(m_LogicalDevice, 1, &m_InFlightFences[m_CurrentFrame]);
 
 	//-- Recording the command buffer.
 	vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
@@ -863,6 +886,46 @@ void Renderer::DrawFrame()
 
 	// Increment frame counter.
 	m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+//-- Swap-Chain Recreation.
+void Renderer::RecreateSwapChain()
+{
+	// Wait for minimize to end, or for device.
+	int width = 0;
+	int height = 0;
+	glfwGetFramebufferSize(m_Window, &width, &height);
+	while (width == 0 || height == 0)
+	{
+#ifdef _DEBUG
+		std::cout << "Framebuffer minimized!" << std::endl;
+#endif
+		glfwGetFramebufferSize(m_Window, &width, &height);
+		glfwWaitEvents();
+	}
+	vkDeviceWaitIdle(m_LogicalDevice);
+
+	// Cleanup current swap chain.
+	DestroySwapChain();
+
+	// Recreate swap chain anew.
+	CreateSwapChain();
+	CreateImageViews();
+	CreateFramebuffers();
+}
+
+void Renderer::DestroySwapChain()
+{
+	// Cleanup swap-chain frame buffers.
+	for (auto frameBuffer : m_SwapChainFramebuffers)
+		vkDestroyFramebuffer(m_LogicalDevice, frameBuffer, nullptr);
+
+	// Cleanup swap-chain image views.
+	for (auto imageView : m_SwapChainImageViews)
+		vkDestroyImageView(m_LogicalDevice, imageView, nullptr);
+
+	// Cleanup swap-chain.
+	vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
 }
 
 //-- Swap-Chain Settings.

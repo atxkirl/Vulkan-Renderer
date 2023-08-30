@@ -46,6 +46,7 @@ private:
 
 	VkSurfaceKHR m_Surface;
 	VkSwapchainKHR m_SwapChain;
+	bool m_FrameBufferResized = false;
 
 	std::vector<VkImage> m_SwapChainImages;
 	std::vector<VkImageView> m_SwapChainImageViews;
@@ -66,7 +67,7 @@ private:
 	std::vector<VkSemaphore> m_ImageAvailableSemaphores;	// Semaphores for each frame.
 	std::vector<VkSemaphore> m_RenderFinishedSemaphores;	// Semaphores for each frame.
 	std::vector<VkFence> m_InFlightFences;					// Fences for each frame.
-	uint32_t m_CurrentFrame;								// Counter for the current frame. Between 0 and MAX_FRAMES_IN_FLIGHT.
+	uint32_t m_CurrentFrame = 0;							// Counter for the current frame. Between 0 and MAX_FRAMES_IN_FLIGHT.
 
 
 //-- Functions
@@ -74,6 +75,8 @@ public:
 	void Initialize();
 	void Update();
 	void Shutdown();
+
+	void FlagFrameBufferResized();
 
 private:
 	//-- Main API initialization.
@@ -85,7 +88,7 @@ private:
 	bool CheckValidationLayerSupport();
 	bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
 
-	//-- GPU Selection Helpers.
+	//-- GPU Selection.
 	bool IsDeviceSuitable(VkPhysicalDevice device);
 	int RateDevice(VkPhysicalDevice device);
 
@@ -103,9 +106,13 @@ private:
 	void CreateCommandBuffers();
 	void CreateSyncObjects();
 
-	// Vulkan rendering!
+	//-- Vulkan Rendering!
 	void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	void DrawFrame();
+
+	//-- Swap Chain Recreation.
+	void DestroySwapChain();
+	void RecreateSwapChain();
 
 	//-- Select swap chain settings.
 	VkSurfaceFormatKHR ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
