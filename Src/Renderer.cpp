@@ -26,10 +26,17 @@ const std::vector<const char*> DeviceExtensions =
 
 
 ///- Static Functions
-static void FrameBufferResizedCallback(GLFWwindow* window, int width, int height)
+static void FrameBufferResizedCallbackFn(GLFWwindow* window, int width, int height)
 {
 	auto app = reinterpret_cast<Renderer*>(glfwGetWindowUserPointer(window));
 	app->FlagFrameBufferResized();
+}
+
+static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallbackFn(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
+{
+	std::cerr << "Level " << messageSeverity << " -> Validation layer: " << pCallbackData->pMessage << std::endl;
+
+	return VK_FALSE;
 }
 
 
@@ -58,6 +65,9 @@ void Renderer::Update()
 void Renderer::Shutdown()
 {
 	std::cout << "Shutting down Renderer!\n";
+
+	if (EnableValidationLayers)
+		DestroyDebugUtilsMessengerEXT(m_Instance, m_DebugMessenger, nullptr);
 
 	// Cleanup frame semaphores and fences.
 	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
@@ -113,12 +123,13 @@ void Renderer::InitGLFW()
 	m_Window = glfwCreateWindow(WIN_WIDTH, WIN_HEIGHT, "Vulkan Renderer", nullptr, nullptr);
 
 	glfwSetWindowUserPointer(m_Window, this);
-	glfwSetFramebufferSizeCallback(m_Window, FrameBufferResizedCallback);
+	glfwSetFramebufferSizeCallback(m_Window, FrameBufferResizedCallbackFn);
 }
 
 void Renderer::InitVulkan()
 {
 	CreateVulkanInstance();
+	SetupDebugMessenger();
 	CreateSurface();
 
 	SelectPhysicalGPU();
@@ -133,6 +144,43 @@ void Renderer::InitVulkan()
 	CreateCommandPool();
 	CreateCommandBuffers();
 	CreateSyncObjects();
+}
+
+//-- Debug.
+VkResult Renderer::CreateDebugUtilMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger)
+{
+	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
+	if (func != nullptr)
+		return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+	else
+		return VK_ERROR_EXTENSION_NOT_PRESENT;
+}
+
+void Renderer::DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMsger, const VkAllocationCallbacks* pAllocator)
+{
+	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkDestroyDebugUtilsMessengerEXT");
+	if (func != nullptr)
+		func(instance, debugMsger, pAllocator);
+}
+
+void Renderer::SetupDebugMessenger()
+{
+	if (!EnableValidationLayers)
+		return;
+
+	VkDebugUtilsMessengerCreateInfoEXT createInfo{};
+	PopulateDebugMessengerCreateInfo(createInfo);
+
+	if (CreateDebugUtilMessengerEXT(m_Instance, &createInfo, nullptr, &m_DebugMessenger) != VK_SUCCESS)
+		throw std::runtime_error("Failed to set up debug messenger!");
+}
+
+void Renderer::PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo)
+{
+	createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+	createInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+	createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+	createInfo.pfnUserCallback = DebugCallbackFn;
 }
 
 //-- Extension Checks.
@@ -211,6 +259,20 @@ bool Renderer::CheckDeviceExtensionSupport(VkPhysicalDevice device)
 	return true;
 }
 
+std::vector<const char*> Renderer::GetRequiredExtensions()
+{
+	uint32_t glfwExtensionCount = 0;
+	const char** glfwExtensions;
+	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+
+	if (EnableValidationLayers)
+		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
+	return extensions;
+}
+
 //-- GPU Selection Helpers.
 bool Renderer::IsDeviceSuitable(VkPhysicalDevice device)
 {
@@ -239,7 +301,7 @@ int Renderer::RateDevice(VkPhysicalDevice device)
 
 	// GPU *must* support geometry shaders!
 	if (!deviceFeatures.geometryShader)
-		return 0;
+		return -1;
 
 	// Discrete GPUs first and foremost.
 	if (deviceProperties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
@@ -270,24 +332,24 @@ void Renderer::CreateVulkanInstance()
 	VkInstanceCreateInfo createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	createInfo.pApplicationInfo = &appInfo;
-	createInfo.enabledLayerCount = 0;
+
+	auto extensions = GetRequiredExtensions();
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+	createInfo.ppEnabledExtensionNames = extensions.data();
+
+	VkDebugUtilsMessengerCreateInfoEXT debugInfo{};
 	if (EnableValidationLayers)
 	{
 		createInfo.enabledLayerCount = static_cast<uint32_t>(ValidationLayers.size());
 		createInfo.ppEnabledLayerNames = ValidationLayers.data();
+		PopulateDebugMessengerCreateInfo(debugInfo);
+		createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT*)&debugInfo;
 	}
 	else
 	{
 		createInfo.enabledLayerCount = 0;
-		createInfo.ppEnabledLayerNames = nullptr;
+		createInfo.pNext = VK_NULL_HANDLE;
 	}
-
-	uint32_t glfwExtensionCount = 0;
-	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
-
-	createInfo.enabledExtensionCount = glfwExtensionCount;
-	createInfo.ppEnabledExtensionNames = glfwExtensions;
-	createInfo.enabledLayerCount = 0;
 
 	if (vkCreateInstance(&createInfo, nullptr, &m_Instance) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create Vulkan instance!");
@@ -303,12 +365,15 @@ void Renderer::SelectPhysicalGPU()
 	std::vector<VkPhysicalDevice> devices(deviceCount);
 	vkEnumeratePhysicalDevices(m_Instance, &deviceCount, devices.data());
 
+	// Rate and sort GPUs.
 	std::multimap<int, VkPhysicalDevice> deviceCandidates;
 	for (const auto& device : devices)
 	{
 		int score = RateDevice(device);
 		deviceCandidates.insert({ score, device });
 	}
+
+	// Pick top GPU.
 	if (deviceCandidates.rbegin()->first > 0)
 	{
 		m_PhysicalDevice = deviceCandidates.rbegin()->second;
@@ -359,15 +424,22 @@ void Renderer::CreateLogicalDevice()
 	createInfo.pEnabledFeatures = &deviceFeatures;
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(DeviceExtensions.size());
 	createInfo.ppEnabledExtensionNames = DeviceExtensions.data();
+	createInfo.pNext = VK_NULL_HANDLE;
 
 	if (EnableValidationLayers)
+	{
 		createInfo.enabledLayerCount = static_cast<uint32_t>(ValidationLayers.size());
+		createInfo.ppEnabledLayerNames = ValidationLayers.data();
+	}
 	else
+	{
 		createInfo.enabledLayerCount = 0;
+	}
 
 	// Create logical device.
 	if (vkCreateDevice(m_PhysicalDevice, &createInfo, nullptr, &m_LogicalDevice) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create logical device!");
+
 	// Retrieve handles to device queues:
 	vkGetDeviceQueue(m_LogicalDevice, indices.m_GraphicsFamily.value(), 0, &m_GraphicsQueue);
 	vkGetDeviceQueue(m_LogicalDevice, indices.m_PresentFamily.value(), 0, &m_PresentQueue);
@@ -566,17 +638,6 @@ void Renderer::CreateGraphicsPipeline()
 		fragShaderStageInfo
 	};
 
-	//-- Fixed Functions.
-	std::vector<VkDynamicState> dynamicStates =
-	{
-		VK_DYNAMIC_STATE_VIEWPORT,
-		VK_DYNAMIC_STATE_SCISSOR
-	};
-	VkPipelineDynamicStateCreateInfo dynamicState{};
-	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-	dynamicState.pDynamicStates = dynamicStates.data();
-
 	//-- Vertex input.
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -607,9 +668,9 @@ void Renderer::CreateGraphicsPipeline()
 	VkPipelineViewportStateCreateInfo viewportState{};
 	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
 	viewportState.viewportCount = 1;
-	viewportState.pViewports = &viewport;
+	//viewportState.pViewports = &viewport;
 	viewportState.scissorCount = 1;
-	viewportState.pScissors = &scissor;
+	//viewportState.pScissors = &scissor;
 
 	//-- Rasterizer.
 	VkPipelineRasterizationStateCreateInfo rasterizer{};
@@ -655,6 +716,17 @@ void Renderer::CreateGraphicsPipeline()
 	colorBlending.blendConstants[2] = 0.f;
 	colorBlending.blendConstants[3] = 0.f;
 
+	//-- Fixed Functions.
+	std::vector<VkDynamicState> dynamicStates =
+	{
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR
+	};
+	VkPipelineDynamicStateCreateInfo dynamicState{};
+	dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+	dynamicState.pDynamicStates = dynamicStates.data();
+
 	//-- Create pipeline layout.
 	VkPipelineLayoutCreateInfo pipelineLayout{};
 	pipelineLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
@@ -681,10 +753,7 @@ void Renderer::CreateGraphicsPipeline()
 	pipelineInfo.layout = m_PipelineLayout;
 	pipelineInfo.renderPass = m_RenderPass;
 	pipelineInfo.subpass = 0;
-
-	// Can be used top derive this pipeline from another existing pipeline.
-	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;	// Optional.
-	pipelineInfo.basePipelineIndex = -1;				// Optional.
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 
 	if (vkCreateGraphicsPipelines(m_LogicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_GraphicsPipeline) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create graphics pipeline!");
@@ -802,10 +871,12 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	viewport.height = static_cast<float>(m_SwapChainExtents.height);
 	viewport.minDepth = 0.f;
 	viewport.maxDepth = 1.f;
+	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
 
 	VkRect2D scissor{};
 	scissor.offset = { 0, 0 };
 	scissor.extent = m_SwapChainExtents;
+	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 	vkCmdDraw(commandBuffer, 3, 1, 0, 0); /// Hardcoded vertex counts for the hardcoded triangle! WILL CHANGE IN FUTURE!
 	vkCmdEndRenderPass(commandBuffer);
@@ -821,17 +892,16 @@ void Renderer::DrawFrame()
 
 	//-- Acquire image from swap chain.
 	uint32_t imageIndex;
-	VkResult result = vkAcquireNextImageKHR(m_LogicalDevice, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], m_InFlightFences[m_CurrentFrame], &imageIndex);
+	VkResult result = vkAcquireNextImageKHR(m_LogicalDevice, m_SwapChain, UINT64_MAX, m_ImageAvailableSemaphores[m_CurrentFrame], VK_NULL_HANDLE, &imageIndex);
 
 	//-- Check if swap chain is out of date.
-	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_FrameBufferResized)
+	if (result == VK_ERROR_OUT_OF_DATE_KHR)
 	{
-		m_FrameBufferResized = !m_FrameBufferResized;
 		RecreateSwapChain();
 		return;
 	}
 	else if (result != VK_SUCCESS)
-		throw std::runtime_error("Failed to acquire swap chain image!");
+		throw std::runtime_error("Failed to present swap-chain image!");
 
 	//-- Reset fence if image acquired.
 	vkResetFences(m_LogicalDevice, 1, &m_InFlightFences[m_CurrentFrame]);
@@ -882,7 +952,14 @@ void Renderer::DrawFrame()
 	presentInfo.pImageIndices = &imageIndex;
 	presentInfo.pResults = nullptr;
 
-	vkQueuePresentKHR(m_PresentQueue, &presentInfo);
+	result = vkQueuePresentKHR(m_PresentQueue, &presentInfo);
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_FrameBufferResized)
+	{
+		m_FrameBufferResized = !m_FrameBufferResized;
+		RecreateSwapChain();
+	}
+	else if (result != VK_SUCCESS)
+		throw std::runtime_error("Failed to present swap-chain image!");
 
 	// Increment frame counter.
 	m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
@@ -989,6 +1066,7 @@ Renderer::QueueFamilyIndices Renderer::FindQueueFamilies(VkPhysicalDevice device
 		// Check for graphics families.
 		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
 			indices.m_GraphicsFamily = i;
+
 		// Check for present families.
 		VkBool32 presentSupport = false;
 		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_Surface, &presentSupport);

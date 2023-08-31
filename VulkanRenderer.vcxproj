@@ -147,12 +147,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Src\main.cpp" />
-    <ClCompile Include="Src\Renderer.cpp" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="Src\FileLoader.h" />
     <ClInclude Include="Src\Renderer.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Src\main.cpp" />
+    <ClCompile Include="Src\Renderer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

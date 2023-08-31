@@ -41,6 +41,8 @@ private:
 	GLFWwindow* m_Window;
 	
 	VkInstance m_Instance;
+	VkDebugUtilsMessengerEXT m_DebugMessenger;
+
 	VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
 	VkDevice m_LogicalDevice;
 
@@ -83,10 +85,17 @@ private:
 	void InitGLFW();
 	void InitVulkan();
 
+	//-- Debug Messenger.
+	VkResult CreateDebugUtilMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);
+	void DestroyDebugUtilsMessengerEXT(VkInstance instance, VkDebugUtilsMessengerEXT debugMsger, const VkAllocationCallbacks* pAllocator);
+	void SetupDebugMessenger();
+	void PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT& createInfo);
+
 	//-- Extension checks.
 	void CheckExtensionSupport();
 	bool CheckValidationLayerSupport();
 	bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
+	std::vector<const char*> GetRequiredExtensions();
 
 	//-- GPU Selection.
 	bool IsDeviceSuitable(VkPhysicalDevice device);
