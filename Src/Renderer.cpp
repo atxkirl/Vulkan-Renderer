@@ -24,6 +24,15 @@ const std::vector<const char*> DeviceExtensions =
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
+// No more hardcoding vertices in shader!
+// Describes a triangle, same as before.
+const std::vector<Vertex> Vertices =
+{
+	{{0.0f, -0.5f}, {1.f, 0.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.f, 1.0f, 0.0f}},
+	{{-0.5f, 0.5f}, {0.f, 0.0f, 1.0f}}
+};
+
 
 ///- Static Functions
 static void FrameBufferResizedCallbackFn(GLFWwindow* window, int width, int height)
@@ -88,6 +97,11 @@ void Renderer::Shutdown()
 	// Cleanup swap-chains.
 	DestroySwapChain();
 
+	// Cleanup buffers.
+	vkDestroyBuffer(m_LogicalDevice, m_VertexBuffer, nullptr);
+	vkDestroyBuffer(m_LogicalDevice, m_IndiceBuffer, nullptr);
+	vkFreeMemory(m_LogicalDevice, m_VertexBufferMemory, nullptr);
+
 	// Cleanup vulkan logical device.
 	vkDestroyDevice(m_LogicalDevice, nullptr);
 
@@ -142,6 +156,7 @@ void Renderer::InitVulkan()
 
 	CreateFramebuffers();
 	CreateCommandPool();
+	CreateVertexBuffer();
 	CreateCommandBuffers();
 	CreateSyncObjects();
 }
@@ -639,12 +654,14 @@ void Renderer::CreateGraphicsPipeline()
 	};
 
 	//-- Vertex input.
+	auto bindingDescription = Vertex::GetBindingDescription();
+	auto attributeDescription = Vertex::GetAttributeDescription();
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 0; /// For now, since vertex data is hardcoded. WILL BE CHANGED!
-	vertexInputInfo.pVertexBindingDescriptions = nullptr;
-	vertexInputInfo.vertexAttributeDescriptionCount = 0;
-	vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescription.size());
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescription.data();
 
 	//-- Input assembly.
 	VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
@@ -839,6 +856,39 @@ void Renderer::CreateSyncObjects()
 	}
 }
 
+void Renderer::CreateVertexBuffer()
+{
+	// Create vertex buffer.
+	VkBufferCreateInfo bufferInfo{};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = sizeof(Vertices[0]) * Vertices.size();
+	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // Only used by graphics queue, so leave as exclusive.
+
+	if (vkCreateBuffer(m_LogicalDevice, &bufferInfo, nullptr, &m_VertexBuffer) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create vertex buffer!");
+
+	// Allocate memory for vertex buffer.
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(m_LogicalDevice, m_VertexBuffer, &memRequirements);
+	VkMemoryPropertyFlags memFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+	VkMemoryAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size;
+	allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, memFlags);
+
+	if (vkAllocateMemory(m_LogicalDevice, &allocInfo, nullptr, &m_VertexBufferMemory) != VK_SUCCESS)
+		throw std::runtime_error("Failed to allocate memory for vertex buffer!");
+	vkBindBufferMemory(m_LogicalDevice, m_VertexBuffer, m_VertexBufferMemory, 0);
+
+	// Map memory to CPU.
+	void* data;
+	vkMapMemory(m_LogicalDevice, m_VertexBufferMemory, 0, bufferInfo.size, 0, &data);
+	memcpy(data, Vertices.data(), (size_t)bufferInfo.size);
+	vkUnmapMemory(m_LogicalDevice, m_VertexBufferMemory);
+}
+
 //-- Vulkan Rendering.
 void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
@@ -864,6 +914,16 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_GraphicsPipeline);
 
+	VkBuffer vertexBuffers[] =
+	{
+		m_VertexBuffer
+	};
+	VkDeviceSize offsets[] =
+	{
+		0
+	};
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+
 	VkViewport viewport;
 	viewport.x = 0.f;
 	viewport.y = 0.f;
@@ -878,7 +938,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	scissor.extent = m_SwapChainExtents;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	vkCmdDraw(commandBuffer, 3, 1, 0, 0); /// Hardcoded vertex counts for the hardcoded triangle! WILL CHANGE IN FUTURE!
+	vkCmdDraw(commandBuffer, static_cast<uint32_t>(Vertices.size()), 1, 0, 0);
 	vkCmdEndRenderPass(commandBuffer);
 
 	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
@@ -1109,6 +1169,21 @@ Renderer::SwapChainSupportDetails Renderer::QuerySwapChainSupport(VkPhysicalDevi
 	}
 
 	return details;
+}
+
+uint32_t Renderer::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+	VkPhysicalDeviceMemoryProperties memoryProperties;
+	vkGetPhysicalDeviceMemoryProperties(m_PhysicalDevice, &memoryProperties);
+
+	for (uint32_t i = 0; i < memoryProperties.memoryTypeCount; ++i)
+	{
+		if  (typeFilter & (1 << i) && 
+			(memoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
+			return i;
+	}
+
+	throw std::runtime_error("Failed to find suitable memory type in GPU!");
 }
 
 //-- Graphics Pipeline.
