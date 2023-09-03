@@ -156,9 +156,14 @@ private:
 	void CreateSyncObjects();
 	void CreateVertexBuffer();
 
+
 	//-- Vulkan Rendering!
 	void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	void DrawFrame();
+
+	//-- Buffer Stuffer.
+	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
 	//-- Swap Chain Recreation.
 	void DestroySwapChain();
