@@ -24,13 +24,17 @@ const std::vector<const char*> DeviceExtensions =
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
-// No more hardcoding vertices in shader!
-// Describes a triangle, same as before.
+// !!HARDCODED QUAD!! TO BE REMOVED IN FUTURE.
 const std::vector<Vertex> Vertices =
 {
-	{{0.0f, -0.5f}, {1.f, 0.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.f, 1.0f, 0.0f}},
-	{{-0.5f, 0.5f}, {0.f, 0.0f, 1.0f}}
+	{{-0.5f, -0.5f}, {1.f, 0.f, 0.f}},
+	{{0.5f, -0.5f}, {0.f, 1.f, 0.f}},
+	{{0.5f, 0.5f}, {0.f, 0.f, 1.f}},
+	{{-0.5f, 0.5f}, {1.f, 1.f, 1.f}}
+};
+const std::vector<uint32_t> Indices =
+{
+	0, 1, 2, 2, 3, 0
 };
 
 
@@ -99,8 +103,9 @@ void Renderer::Shutdown()
 
 	// Cleanup buffers.
 	vkDestroyBuffer(m_LogicalDevice, m_VertexBuffer, nullptr);
-	vkDestroyBuffer(m_LogicalDevice, m_IndiceBuffer, nullptr);
+	vkDestroyBuffer(m_LogicalDevice, m_IndexBuffer, nullptr);
 	vkFreeMemory(m_LogicalDevice, m_VertexBufferMemory, nullptr);
+	vkFreeMemory(m_LogicalDevice, m_IndexBufferMemory, nullptr);
 
 	// Cleanup vulkan logical device.
 	vkDestroyDevice(m_LogicalDevice, nullptr);
@@ -156,7 +161,10 @@ void Renderer::InitVulkan()
 
 	CreateFramebuffers();
 	CreateCommandPool();
+
 	CreateVertexBuffer();
+	CreateIndexBuffer();
+
 	CreateCommandBuffers();
 	CreateSyncObjects();
 }
@@ -873,9 +881,35 @@ void Renderer::CreateVertexBuffer()
 	vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
 
 	// Vertex buffer, created in high-performance memory in GPU.
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, memProperties, m_VertexBuffer, m_VertexBufferMemory);
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_VertexBuffer, m_VertexBufferMemory);
 	// Copy from staging buffer to vertex buffer.
 	CopyBuffer(stagingBuffer, m_VertexBuffer, bufferSize);
+
+	// Cleanup staging buffer.
+	vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
+	vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
+}
+
+void Renderer::CreateIndexBuffer()
+{
+	VkDeviceSize bufferSize = sizeof(Indices[0]) * Indices.size();
+	VkMemoryPropertyFlags memProperties = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+
+	// Staging buffer.
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, memProperties, stagingBuffer, stagingBufferMemory);
+
+	// Map memory to CPU.
+	void* data;
+	vkMapMemory(m_LogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, Indices.data(), (size_t)bufferSize);
+	vkUnmapMemory(m_LogicalDevice, stagingBufferMemory);
+
+	// Index buffer, created in high-performance memory in GPU.
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_IndexBuffer, m_IndexBufferMemory);
+	// Copy from staging buffer to index buffer.
+	CopyBuffer(stagingBuffer, m_IndexBuffer, bufferSize);
 
 	// Cleanup staging buffer.
 	vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
@@ -916,6 +950,7 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 		0
 	};
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
+	vkCmdBindIndexBuffer(commandBuffer, m_IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
 	VkViewport viewport;
 	viewport.x = 0.f;
@@ -931,7 +966,8 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	scissor.extent = m_SwapChainExtents;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	vkCmdDraw(commandBuffer, static_cast<uint32_t>(Vertices.size()), 1, 0, 0);
+	//vkCmdDraw(commandBuffer, static_cast<uint32_t>(Vertices.size()), 1, 0, 0); // Redundant, doesn't use index buffer.
+	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(Indices.size()), 1, 0, 0, 0);
 	vkCmdEndRenderPass(commandBuffer);
 
 	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)

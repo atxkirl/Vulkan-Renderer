@@ -109,7 +109,8 @@ private:
 	VkBuffer m_VertexBuffer;
 	VkDeviceMemory m_VertexBufferMemory;
 
-	VkBuffer m_IndiceBuffer;
+	VkBuffer m_IndexBuffer;
+	VkDeviceMemory m_IndexBufferMemory;
 
 
 //-- Functions
@@ -155,6 +156,7 @@ private:
 	void CreateCommandBuffers();
 	void CreateSyncObjects();
 	void CreateVertexBuffer();
+	void CreateIndexBuffer();
 
 
 	//-- Vulkan Rendering!
