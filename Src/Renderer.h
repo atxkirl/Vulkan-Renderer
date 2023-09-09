@@ -112,6 +112,9 @@ private:
 	VkBuffer m_IndexBuffer;
 	VkDeviceMemory m_IndexBufferMemory;
 
+	// TESTING
+	std::vector<const char*> m_Extensions;
+
 
 //-- Functions
 public:
@@ -136,7 +139,7 @@ private:
 	void CheckExtensionSupport();
 	bool CheckValidationLayerSupport();
 	bool CheckDeviceExtensionSupport(VkPhysicalDevice device);
-	std::vector<const char*> GetRequiredExtensions();
+	void GetRequiredExtensions();
 
 	//-- GPU Selection.
 	bool IsDeviceSuitable(VkPhysicalDevice device);

@@ -47,8 +47,25 @@ static void FrameBufferResizedCallbackFn(GLFWwindow* window, int width, int heig
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallbackFn(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
 {
-	std::cerr << "Level " << messageSeverity << " -> Validation layer: " << pCallbackData->pMessage << std::endl;
+	std::string msgLevel = "";
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT)
+		msgLevel = "Verbose ";
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT)
+		msgLevel = "Info ";
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT)
+		msgLevel = "Warning ";
+	if (messageSeverity & VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT)
+		msgLevel = "Error ";
 
+	std::string msgType = "";
+	if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT)
+		msgType += "General ";
+	if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT)
+		msgType += "Validation ";
+	if (messageType & VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT)
+		msgType += "Performance ";
+
+	fprintf(stderr, "[vulkan] Debug callback of level: %s- type: %s\nMessage: %s\n\n", msgLevel.c_str(), msgType.c_str(), pCallbackData->pMessage);
 	return VK_FALSE;
 }
 
@@ -147,16 +164,25 @@ void Renderer::InitGLFW()
 
 void Renderer::InitVulkan()
 {
+	// Vulkan context.
 	CreateVulkanInstance();
 	SetupDebugMessenger();
 	CreateSurface();
 
+	// Vulkan physical device.
 	SelectPhysicalGPU();
+
+	// Vulkan logical device.
 	CreateLogicalDevice();
+
+	// Vulkan swapchain.
 	CreateSwapChain();
 	CreateImageViews();
 
+	// Vulkan renderpass.
 	CreateRenderPass();
+
+	// Vulkan graphics pipeline.
 	CreateGraphicsPipeline();
 
 	CreateFramebuffers();
@@ -282,18 +308,18 @@ bool Renderer::CheckDeviceExtensionSupport(VkPhysicalDevice device)
 	return true;
 }
 
-std::vector<const char*> Renderer::GetRequiredExtensions()
+void Renderer::GetRequiredExtensions()
 {
 	uint32_t glfwExtensionCount = 0;
-	const char** glfwExtensions;
-	glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+	const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+	if (glfwExtensions == nullptr)
+		throw std::runtime_error("Required Vulkan extensions not available on this machine!");
 
-	std::vector<const char*> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+	m_Extensions.reserve(glfwExtensionCount);
+	m_Extensions.assign(glfwExtensions, glfwExtensions + glfwExtensionCount);
 
 	if (EnableValidationLayers)
-		extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-
-	return extensions;
+		m_Extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 }
 
 //-- GPU Selection Helpers.
@@ -356,9 +382,9 @@ void Renderer::CreateVulkanInstance()
 	createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	createInfo.pApplicationInfo = &appInfo;
 
-	auto extensions = GetRequiredExtensions();
-	createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
-	createInfo.ppEnabledExtensionNames = extensions.data();
+	GetRequiredExtensions();
+	createInfo.enabledExtensionCount = static_cast<uint32_t>(m_Extensions.size());
+	createInfo.ppEnabledExtensionNames = m_Extensions.data();
 
 	VkDebugUtilsMessengerCreateInfoEXT debugInfo{};
 	if (EnableValidationLayers)
