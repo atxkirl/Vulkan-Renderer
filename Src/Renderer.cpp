@@ -4,7 +4,6 @@
 
 #include "FileLoader.h"
 
-
 const uint32_t WIN_WIDTH = 800;		// Window width.
 const uint32_t WIN_HEIGHT = 600;	// Window height.
 const int MAX_FRAMES_IN_FLIGHT = 2;	// Max number of frames that should be processed concurrently. (AKA max number of pre-rendered frames.)
@@ -24,7 +23,7 @@ const std::vector<const char*> DeviceExtensions =
 	VK_KHR_SWAPCHAIN_EXTENSION_NAME
 };
 
-// !!HARDCODED QUAD!! TO BE REMOVED IN FUTURE.
+#pragma region Hardcoded Quad, to be removed in future!
 const std::vector<Vertex> Vertices =
 {
 	{{-0.5f, -0.5f}, {1.f, 0.f, 0.f}},
@@ -36,6 +35,7 @@ const std::vector<uint32_t> Indices =
 {
 	0, 1, 2, 2, 3, 0
 };
+#pragma endregion
 
 
 ///- Static Functions
@@ -148,7 +148,7 @@ void Renderer::FlagFrameBufferResized()
 
 
 ///- Private Functions
-//-- Main API Initializations.
+#pragma region Main API Initialization.
 void Renderer::InitGLFW()
 {
 	glfwInit();
@@ -185,17 +185,19 @@ void Renderer::InitVulkan()
 	// Vulkan graphics pipeline.
 	CreateGraphicsPipeline();
 
+	// Vulkan render objects.
 	CreateFramebuffers();
 	CreateCommandPool();
-
-	CreateVertexBuffer();
-	CreateIndexBuffer();
-
 	CreateCommandBuffers();
 	CreateSyncObjects();
-}
 
-//-- Debug.
+	// Vert and Indx buffers FOR TESTING.
+	CreateVertexBuffer();
+	CreateIndexBuffer();
+}
+#pragma endregion
+
+#pragma region Debugging.
 VkResult Renderer::CreateDebugUtilMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger)
 {
 	auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(instance, "vkCreateDebugUtilsMessengerEXT");
@@ -231,8 +233,9 @@ void Renderer::PopulateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoE
 	createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
 	createInfo.pfnUserCallback = DebugCallbackFn;
 }
+#pragma endregion
 
-//-- Extension Checks.
+#pragma region Extension Checkers.
 void Renderer::CheckExtensionSupport()
 {
 	// Print out valid extensions for the selected GPU.
@@ -321,8 +324,9 @@ void Renderer::GetRequiredExtensions()
 	if (EnableValidationLayers)
 		m_Extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 }
+#pragma endregion
 
-//-- GPU Selection Helpers.
+#pragma region GPU Selection Helpers.
 bool Renderer::IsDeviceSuitable(VkPhysicalDevice device)
 {
 	QueueFamilyIndices indices = FindQueueFamilies(device);
@@ -360,8 +364,9 @@ int Renderer::RateDevice(VkPhysicalDevice device)
 
 	return score;
 }
+#pragma endregion
 
-//-- Vulkan Initialization.
+#pragma region Vulkan Initialization.
 void Renderer::CreateVulkanInstance()
 {
 	CheckExtensionSupport();
@@ -941,8 +946,9 @@ void Renderer::CreateIndexBuffer()
 	vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
 	vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
 }
+#pragma endregion
 
-//-- Vulkan Rendering.
+#pragma region Vulkan Rendering.
 void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
 {
 	VkCommandBufferBeginInfo beginInfo{};
@@ -1079,8 +1085,9 @@ void Renderer::DrawFrame()
 	// Increment frame counter.
 	m_CurrentFrame = (m_CurrentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
+#pragma endregion
 
-//-- Buffer Stuffer.
+#pragma region Buffer Stuff.
 void Renderer::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
 {
 	// Create vertex buffer.
@@ -1145,8 +1152,9 @@ void Renderer::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize s
 	// Release command buffer.
 	vkFreeCommandBuffers(m_LogicalDevice, m_CommandPool, 1, &commandBuffer);
 }
+#pragma endregion
 
-//-- Swap-Chain Recreation.
+#pragma region SwapChain Recreation.
 void Renderer::RecreateSwapChain()
 {
 	// Wait for minimize to end, or for device.
@@ -1185,8 +1193,9 @@ void Renderer::DestroySwapChain()
 	// Cleanup swap-chain.
 	vkDestroySwapchainKHR(m_LogicalDevice, m_SwapChain, nullptr);
 }
+#pragma endregion
 
-//-- Swap-Chain Settings.
+#pragma region SwapChain Settings.
 VkSurfaceFormatKHR Renderer::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats)
 {
 	for (const auto& availableFormat : availableFormats)
@@ -1229,8 +1238,9 @@ VkExtent2D Renderer::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabiliti
 
 	return actualExtents;
 }
+#pragma endregion
 
-//-- GPU Querying.
+#pragma region GPU Querying.
 Renderer::QueueFamilyIndices Renderer::FindQueueFamilies(VkPhysicalDevice device)
 {
 	QueueFamilyIndices indices;
@@ -1306,8 +1316,9 @@ uint32_t Renderer::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags pro
 
 	throw std::runtime_error("Failed to find suitable memory type in GPU!");
 }
+#pragma endregion
 
-//-- Graphics Pipeline.
+#pragma region Graphics Pipeline.
 VkShaderModule Renderer::CreateShaderModule(std::vector<char>& shaderCode)
 {
 	VkShaderModuleCreateInfo createInfo{};
@@ -1321,3 +1332,4 @@ VkShaderModule Renderer::CreateShaderModule(std::vector<char>& shaderCode)
 
 	return shaderModule;
 }
+#pragma endregion

@@ -128,6 +128,7 @@ private:
 	//-- Main API initialization.
 	void InitGLFW();
 	void InitVulkan();
+	void InitVulkan2();
 
 	//-- Debug Messenger.
 	VkResult CreateDebugUtilMessengerEXT(VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDebugUtilsMessengerEXT* pDebugMessenger);

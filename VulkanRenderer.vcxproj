@@ -148,6 +148,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="Src\FileLoader.h" />
+    <ClInclude Include="Src\meowpch.h" />
     <ClInclude Include="Src\Renderer.h" />
   </ItemGroup>
   <ItemGroup>
