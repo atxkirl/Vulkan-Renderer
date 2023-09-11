@@ -150,10 +150,45 @@
     <ClInclude Include="Src\FileLoader.h" />
     <ClInclude Include="Src\meowpch.h" />
     <ClInclude Include="Src\Renderer.h" />
+    <ClInclude Include="Src\Vertex.h" />
+    <ClInclude Include="Src\VulkanBuffers.h" />
+    <ClInclude Include="Src\VulkanCommandBuffer.h" />
+    <ClInclude Include="Src\VulkanCommandPool.h" />
+    <ClInclude Include="Src\VulkanContext.h" />
+    <ClInclude Include="Src\VulkanDebugger.h" />
+    <ClInclude Include="Src\VulkanDefines.h" />
+    <ClInclude Include="Src\VulkanFrameBuffer.h" />
+    <ClInclude Include="Src\VulkanIndexBuffer.h" />
+    <ClInclude Include="Src\VulkanLogicalDevice.h" />
+    <ClInclude Include="Src\VulkanPhysicalDevice.h" />
+    <ClInclude Include="Src\VulkanPipeline.h" />
+    <ClInclude Include="Src\VulkanQuery.h" />
+    <ClInclude Include="Src\VulkanRenderer.h" />
+    <ClInclude Include="Src\VulkanRenderPass.h" />
+    <ClInclude Include="Src\VulkanSwapChain.h" />
+    <ClInclude Include="Src\VulkanSyncObjects.h" />
+    <ClInclude Include="Src\VulkanVertexBuffer.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Src\main.cpp" />
     <ClCompile Include="Src\Renderer.cpp" />
+    <ClCompile Include="Src\Vertex.cpp" />
+    <ClCompile Include="Src\VulkanBuffers.cpp" />
+    <ClCompile Include="Src\VulkanCommandBuffer.cpp" />
+    <ClCompile Include="Src\VulkanCommandPool.cpp" />
+    <ClCompile Include="Src\VulkanContext.cpp" />
+    <ClCompile Include="Src\VulkanDebugger.cpp" />
+    <ClCompile Include="Src\VulkanFrameBuffer.cpp" />
+    <ClCompile Include="Src\VulkanIndexBuffer.cpp" />
+    <ClCompile Include="Src\VulkanLogicalDevice.cpp" />
+    <ClCompile Include="Src\VulkanPhysicalDevice.cpp" />
+    <ClCompile Include="Src\VulkanPipeline.cpp" />
+    <ClCompile Include="Src\VulkanQuery.cpp" />
+    <ClCompile Include="Src\VulkanRenderer.cpp" />
+    <ClCompile Include="Src\VulkanRenderPass.cpp" />
+    <ClCompile Include="Src\VulkanSwapChain.cpp" />
+    <ClCompile Include="Src\VulkanSyncObjects.cpp" />
+    <ClCompile Include="Src\VulkanVertexBuffer.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

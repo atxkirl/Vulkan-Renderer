@@ -13,10 +13,23 @@
 __________________________________________________________________________________*/
 #pragma once
 
+#include <vulkan/vulkan.h>
+
 namespace Nya
 {
-	class VulkanBuffers
+	class VulkanBuffer
 	{
-		
+	protected:
+		VkBuffer m_Buffer{};
+		VkDeviceMemory m_BufferMemory{};
+
+		void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+		void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size, VkCommandPool commandPool);
+
+	public:
+		void Cleanup() const;
+
+		VkBuffer GetBuffer() const;
+		VkDeviceMemory GetBufferMemory() const;
 	};
 }

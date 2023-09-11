@@ -20,12 +20,16 @@ ________________________________________________________________________________
 namespace Nya
 {
 	//-- Singleton.
-	std::unique_ptr<VulkanContext> VulkanContext::s_Instance = nullptr;
+	//std::unique_ptr<VulkanContext> VulkanContext::s_Instance = nullptr;
+	VulkanContext* VulkanContext::s_Instance = nullptr;
 
 	VulkanContext& VulkanContext::Get()
 	{
 		if (!s_Instance)
-			s_Instance = std::make_unique<VulkanContext>();
+		{
+			//s_Instance = std::make_unique<VulkanContext>();
+			s_Instance = new VulkanContext();
+		}
 
 		return *s_Instance;
 	}
@@ -48,10 +52,10 @@ namespace Nya
 		appInfo.apiVersion = VK_API_VERSION_1_0;
 
 		// Create info for vulkan instance.
-		GetRequiredExtensions();
 		VkInstanceCreateInfo createInfo{};
 		createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 		createInfo.pApplicationInfo = &appInfo;
+		GetRequiredExtensions();
 		createInfo.enabledExtensionCount = static_cast<uint32_t>(m_Extensions.size());
 		createInfo.ppEnabledExtensionNames = m_Extensions.data();
 

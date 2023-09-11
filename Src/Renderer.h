@@ -65,7 +65,7 @@ class Renderer
 	};
 	struct SwapChainSupportDetails
 	{
-		VkSurfaceCapabilitiesKHR m_Capabilities;
+		VkSurfaceCapabilitiesKHR m_Capabilities{};
 		std::vector<VkSurfaceFormatKHR> m_Formats;
 		std::vector<VkPresentModeKHR> m_PresentModes;
 	};
@@ -73,44 +73,44 @@ class Renderer
 
 //-- Variables
 private:
-	GLFWwindow* m_Window;
+	GLFWwindow* m_Window{};
 	
-	VkInstance m_Instance;
-	VkDebugUtilsMessengerEXT m_DebugMessenger;
+	VkInstance m_Instance{};
+	VkDebugUtilsMessengerEXT m_DebugMessenger{};
 
 	VkPhysicalDevice m_PhysicalDevice = VK_NULL_HANDLE;
-	VkDevice m_LogicalDevice;
+	VkDevice m_LogicalDevice{};
 
-	VkSurfaceKHR m_Surface;
-	VkSwapchainKHR m_SwapChain;
+	VkSurfaceKHR m_Surface{};
+	VkSwapchainKHR m_SwapChain{};
 	bool m_FrameBufferResized = false;
 
 	std::vector<VkImage> m_SwapChainImages;
 	std::vector<VkImageView> m_SwapChainImageViews;
 	std::vector<VkFramebuffer> m_SwapChainFramebuffers;
 
-	VkFormat m_SwapChainImageFormat;
-	VkExtent2D m_SwapChainExtents;
+	VkFormat m_SwapChainImageFormat{};
+	VkExtent2D m_SwapChainExtents{};
 
-	VkQueue m_GraphicsQueue;
-	VkQueue m_PresentQueue;
+	VkQueue m_GraphicsQueue{};
+	VkQueue m_PresentQueue{};
 
-	VkRenderPass m_RenderPass;
-	VkPipelineLayout m_PipelineLayout;
-	VkPipeline m_GraphicsPipeline;
+	VkRenderPass m_RenderPass{};
+	VkPipelineLayout m_PipelineLayout{};
+	VkPipeline m_GraphicsPipeline{};
 
-	VkCommandPool m_CommandPool;
+	VkCommandPool m_CommandPool{};
 	std::vector<VkCommandBuffer> m_CommandBuffers;			// Command buffers for each frame.
 	std::vector<VkSemaphore> m_ImageAvailableSemaphores;	// Semaphores for each frame.
 	std::vector<VkSemaphore> m_RenderFinishedSemaphores;	// Semaphores for each frame.
 	std::vector<VkFence> m_InFlightFences;					// Fences for each frame.
 	uint32_t m_CurrentFrame = 0;							// Counter for the current frame. Between 0 and MAX_FRAMES_IN_FLIGHT.
 
-	VkBuffer m_VertexBuffer;
-	VkDeviceMemory m_VertexBufferMemory;
+	VkBuffer m_VertexBuffer{};
+	VkDeviceMemory m_VertexBufferMemory{};
 
-	VkBuffer m_IndexBuffer;
-	VkDeviceMemory m_IndexBufferMemory;
+	VkBuffer m_IndexBuffer{};
+	VkDeviceMemory m_IndexBufferMemory{};
 
 	// TESTING
 	std::vector<const char*> m_Extensions;

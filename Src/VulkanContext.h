@@ -13,6 +13,7 @@
 __________________________________________________________________________________*/
 #pragma once
 
+#include "meowpch.h"
 #include <vulkan/vulkan.h>
 
 #define GLFW_INCLUDE_VULKAN
@@ -24,10 +25,11 @@ namespace Nya
 {
 	class VulkanContext
 	{
-		static std::unique_ptr<VulkanContext> s_Instance;
+		//static std::unique_ptr<VulkanContext> s_Instance;
+		static VulkanContext* s_Instance;
 
 		//std::shared_ptr<Window> m_Window;
-		GLFWwindow* m_Window;
+		GLFWwindow* m_Window{};
 		VkInstance m_Instance{};
 		VkSurfaceKHR m_Surface{};
 

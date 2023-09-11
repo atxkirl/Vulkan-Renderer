@@ -1,42 +1,39 @@
 #pragma once
 
-#include "VulkanBuffers.h"
+#include "meowpch.h"
+
 #include "VulkanCommandBuffer.h"
 #include "VulkanCommandPool.h"
 #include "VulkanContext.h"
-#include "VulkanDebugger.h"
 #include "VulkanDefines.h"
 #include "VulkanFrameBuffer.h"
-#include "VulkanLogicalDevice.h"
-#include "VulkanPhysicalDevice.h"
 #include "VulkanPipeline.h"
-#include "VulkanQuery.h"
 #include "VulkanRenderPass.h"
-#include "VulkanSwapChain.h"
 #include "VulkanSyncObjects.h"
-using namespace Nya;
+#include "VulkanVertexBuffer.h"
+#include "VulkanIndexBuffer.h"
 
-#include "meowpch.h"
 
 class MeowRenderer
 {
 	static std::unique_ptr<MeowRenderer> s_Instance;
 
-	GLFWwindow* m_Window;
+	std::shared_ptr<Nya::VulkanRenderpass> m_RenderPass;
+	std::shared_ptr<Nya::VulkanPipeline> m_Pipeline;
+	//std::vector<std::shared_ptr<Nya::VulkanFramebuffer>> m_Framebuffers;
 
-	std::shared_ptr<VulkanRenderpass> m_RenderPass;
-	std::shared_ptr<VulkanPipeline> m_Pipeline;
-	std::vector<std::shared_ptr<VulkanFramebuffer>> m_Framebuffers;
+	std::shared_ptr<Nya::VulkanCommandPool> m_CommandPool;
+	std::vector<std::shared_ptr<Nya::VulkanCommandBuffer>> m_CommandBuffers;
 
-	std::shared_ptr<VulkanCommandPool> m_CommandPool;
-	std::vector<std::shared_ptr<VulkanCommandBuffer>> m_CommandBuffers;
+	std::shared_ptr<Nya::VulkanSyncObjects> m_SyncObjects;
 
-	std::shared_ptr<VulkanSyncObjects> m_SyncObjects;
-
-
-
-
+	// TESTING VARIABLES.
+	GLFWwindow* m_Window{};
 	bool m_FrameBufferResized = false;
+	int m_CurrentFrame = 0;
+	std::shared_ptr<Nya::VulkanVertexBuffer> m_VertexBuffer;
+	std::shared_ptr<Nya::VulkanIndexBuffer> m_IndexBuffer;
+	// ~TESTING VARIABLES
 
 public:
 	static MeowRenderer& Get();

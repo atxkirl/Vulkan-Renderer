@@ -23,12 +23,16 @@ ________________________________________________________________________________
 namespace Nya
 {
 	//-- Singleton.
-	std::unique_ptr<VulkanLogicalDevice> VulkanLogicalDevice::s_Instance = nullptr;
+	//std::unique_ptr<VulkanLogicalDevice> VulkanLogicalDevice::s_Instance = nullptr;
+	VulkanLogicalDevice* VulkanLogicalDevice::s_Instance = nullptr;
 
 	VulkanLogicalDevice& VulkanLogicalDevice::Get()
 	{
 		if (!s_Instance)
-			s_Instance = std::make_unique<VulkanLogicalDevice>();
+		{
+			//s_Instance = std::make_unique<VulkanLogicalDevice>();
+			s_Instance = new VulkanLogicalDevice();
+		}
 
 		return *s_Instance;
 	}

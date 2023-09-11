@@ -13,19 +13,20 @@
 __________________________________________________________________________________*/
 #pragma once
 
-#include "VulkanDefines.h"
+#include <vulkan/vulkan.h>
 #include "VulkanContext.h"
 
 namespace Nya
 {
 	class VulkanSwapchain
 	{
-		static std::unique_ptr<VulkanSwapchain> s_Instance;
+		//static std::unique_ptr<VulkanSwapchain> s_Instance;
+		static VulkanSwapchain* s_Instance;
 
 		VkSwapchainKHR m_SwapChain{};
 		std::vector<VkImage> m_SwapChainImages;
 		std::vector<VkImageView> m_SwapChainImageViews;
-		//std::vector<VkFramebuffer> m_SwapChainFramebuffers;
+		std::vector<VkFramebuffer> m_SwapChainFramebuffers;
 
 		VkFormat m_SwapChainImageFormat{};
 		VkExtent2D m_SwapChainImageExtents{};
@@ -36,7 +37,9 @@ namespace Nya
 	public:
 		static VulkanSwapchain& Get();
 		void Init();
+		void CreateSwapChainFramebuffers(VkRenderPass renderPass);
 		void Cleanup() const;
+		void Recreate(VkRenderPass renderPass);
 
 		VkSwapchainKHR GetSwapChain() const;
 		VkFormat GetSwapChainImageFormat() const;
@@ -44,5 +47,6 @@ namespace Nya
 
 		std::vector<VkImage> GetSwapChainImages() const;
 		std::vector<VkImageView> GetSwapChainImageViews() const;
+		std::vector<VkFramebuffer> GetSwapChainFramebuffers() const;
 	};
 }

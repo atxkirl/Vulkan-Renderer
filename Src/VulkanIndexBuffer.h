@@ -1,11 +1,11 @@
 ﻿/*!
-\file		VulkanPhysicalDevice.h
-\date		09/09/2023
+\file		VulkanIndexBuffer.h
+\date		11/09/2023
 
 \author		Adrian Tan
 \email		t.xingkhiangadrian\@digipen.edu
 
-\brief		Contains definition of VulkanPhysicalDevice class.
+\brief		Contains definition of VulkanIndexBuffer class.
 
 \copyright	All content © 2023 DigiPen (SINGAPORE) Corporation, all rights reserved.
 			Reproduction or disclosure of this file or its contents without the
@@ -13,22 +13,16 @@
 __________________________________________________________________________________*/
 #pragma once
 
-#include "VulkanDefines.h"
+#include "VulkanBuffers.h"
 
 namespace Nya
 {
-	class VulkanPhysicalDevice
+	class VulkanCommandPool;
+	struct Vertex;
+
+	class VulkanIndexBuffer : public VulkanBuffer
 	{
-		//static std::unique_ptr<VulkanPhysicalDevice> s_Instance;
-		static VulkanPhysicalDevice* s_Instance;
-
-		VkPhysicalDevice m_PhysicalDevice{};
-
 	public:
-		static VulkanPhysicalDevice& Get();
-
-		VkPhysicalDevice GetPhysicalDevice() const;
-
-		void Init();
+		void Init(const std::vector<uint32_t>& indices, VkCommandPool commandPool);
 	};
 }

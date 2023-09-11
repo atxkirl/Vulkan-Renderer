@@ -22,7 +22,8 @@ namespace Nya
 
 	class VulkanLogicalDevice
 	{
-		static std::unique_ptr<VulkanLogicalDevice> s_Instance;
+		//static std::unique_ptr<VulkanLogicalDevice> s_Instance;
+		static VulkanLogicalDevice* s_Instance;
 
 		VkDevice m_LogicalDevice{};
 		VkQueue m_GraphicsQueue{};

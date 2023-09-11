@@ -24,12 +24,16 @@ ________________________________________________________________________________
 namespace Nya
 {
 	//-- Singleton.
-	std::unique_ptr<VulkanSwapchain> VulkanSwapchain::s_Instance = nullptr;
+	//std::unique_ptr<VulkanSwapchain> VulkanSwapchain::s_Instance = nullptr;
+	VulkanSwapchain* VulkanSwapchain::s_Instance = nullptr;
 
 	VulkanSwapchain& VulkanSwapchain::Get()
 	{
 		if (!s_Instance)
-			s_Instance = std::unique_ptr<VulkanSwapchain>();
+		{
+			//s_Instance = std::unique_ptr<VulkanSwapchain>();
+			s_Instance = new VulkanSwapchain();
+		}
 
 		return *s_Instance;
 	}
@@ -130,7 +134,9 @@ namespace Nya
 		createInfo.clipped = VK_TRUE;				// Ignore pixels that are obscured by another window.
 		createInfo.oldSwapchain = VK_NULL_HANDLE;	// Should store the old swapchain handle here, if swapchain is being recreated.
 
-		if (vkCreateSwapchainKHR(VulkanLogicalDevice::Get().GetLogicalDevice(), &createInfo, nullptr, &m_SwapChain) != VK_SUCCESS)
+		m_SwapChain = nullptr;
+		const auto device = VulkanLogicalDevice::Get().GetLogicalDevice();
+		if (vkCreateSwapchainKHR(device, &createInfo, nullptr, &m_SwapChain) != VK_SUCCESS)
 			throw std::runtime_error("Failed to create swap chain!");
 
 		vkGetSwapchainImagesKHR(VulkanLogicalDevice::Get().GetLogicalDevice(), m_SwapChain, &imageCount, nullptr);
@@ -171,20 +177,77 @@ namespace Nya
 		}
 	}
 
+	void VulkanSwapchain::CreateSwapChainFramebuffers(const VkRenderPass renderPass)
+	{
+		m_SwapChainFramebuffers.resize(m_SwapChainImageViews.size());
+
+		for (size_t i = 0; i < m_SwapChainImageViews.size(); ++i)
+		{
+			const VkImageView attachments[] =
+			{
+				m_SwapChainImageViews[i]
+			};
+
+			VkFramebufferCreateInfo frameBufferInfo{};
+			frameBufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+			frameBufferInfo.renderPass = renderPass;
+			frameBufferInfo.attachmentCount = 1;
+			frameBufferInfo.pAttachments = attachments;
+			frameBufferInfo.width = m_SwapChainImageExtents.width;
+			frameBufferInfo.height = m_SwapChainImageExtents.height;
+			frameBufferInfo.layers = 1;
+
+			if (vkCreateFramebuffer(VulkanLogicalDevice::Get().GetLogicalDevice(), &frameBufferInfo, nullptr, &m_SwapChainFramebuffers[i]) != VK_SUCCESS)
+				throw std::runtime_error("Failed to create framebuffer at index [" + std::to_string(i) + "]!");
+		}
+	}
+
 	void VulkanSwapchain::Init()
 	{
 		CreateSwapChain();
 		CreateSwapChainImageViews();
+
+		//CreateSwapChainFramebuffers(index, renderPass);
+		std::cout << "Remember to call CreateFrameBuffers() after initializing render pass!" << std::endl;
 	}
 
 	void VulkanSwapchain::Cleanup() const
 	{
+		// Cleanup swap-chain frame buffers.
+		for (const auto frameBuffer : m_SwapChainFramebuffers)
+			vkDestroyFramebuffer(VulkanLogicalDevice::Get().GetLogicalDevice(), frameBuffer, nullptr);
+
 		// Cleanup swap-chain image views.
 		for (const auto imageView : m_SwapChainImageViews)
 			vkDestroyImageView(VulkanLogicalDevice::Get().GetLogicalDevice(), imageView, nullptr);
 
 		// Cleanup swap-chain.
 		vkDestroySwapchainKHR(VulkanLogicalDevice::Get().GetLogicalDevice(), m_SwapChain, nullptr);
+	}
+
+	void VulkanSwapchain::Recreate(const VkRenderPass renderPass)
+	{
+		// Wait for minimize to end, or for device.
+		int width = 0;
+		int height = 0;
+		glfwGetFramebufferSize(VulkanContext::Get().GetWindow(), &width, &height);
+		while (width == 0 || height == 0)
+		{
+#ifdef _DEBUG
+			std::cout << "Framebuffer minimized!" << std::endl;
+#endif
+			glfwGetFramebufferSize(VulkanContext::Get().GetWindow(), &width, &height);
+			glfwWaitEvents();
+		}
+		vkDeviceWaitIdle(VulkanLogicalDevice::Get().GetLogicalDevice());
+
+		// Cleanup current swap chain.
+		Cleanup();
+
+		// Recreate swap chain anew.
+		CreateSwapChain();
+		CreateSwapChainImageViews();
+		CreateSwapChainFramebuffers(renderPass);
 	}
 
 	VkSwapchainKHR VulkanSwapchain::GetSwapChain() const
@@ -210,5 +273,10 @@ namespace Nya
 	std::vector<VkImageView> VulkanSwapchain::GetSwapChainImageViews() const
 	{
 		return m_SwapChainImageViews;
+	}
+
+	std::vector<VkFramebuffer> VulkanSwapchain::GetSwapChainFramebuffers() const
+	{
+		return m_SwapChainFramebuffers;
 	}
 }

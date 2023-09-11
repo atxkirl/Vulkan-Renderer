@@ -20,12 +20,16 @@ ________________________________________________________________________________
 namespace Nya
 {
 	//-- Singleton.
-	std::unique_ptr<VulkanPhysicalDevice> VulkanPhysicalDevice::s_Instance = nullptr;
+	//std::unique_ptr<VulkanPhysicalDevice> VulkanPhysicalDevice::s_Instance = nullptr;
+	VulkanPhysicalDevice* VulkanPhysicalDevice::s_Instance = nullptr;
 
 	VulkanPhysicalDevice& VulkanPhysicalDevice::Get()
 	{
 		if (!s_Instance)
-			s_Instance = std::make_unique<VulkanPhysicalDevice>();
+		{
+			//s_Instance = std::make_unique<VulkanPhysicalDevice>();
+			s_Instance = new VulkanPhysicalDevice();
+		}
 
 		return *s_Instance;
 	}
@@ -91,6 +95,14 @@ namespace Nya
 			MEOW_LOG_INFO("Selected GPU:");
 			MEOW_LOG_INFO("GPU Name: ", deviceProperties.deviceName);
 			MEOW_LOG_INFO("GPU Vendor: ", deviceProperties.vendorID);
+#endif
+#ifdef _DEBUG
+			VkPhysicalDeviceProperties deviceProperties;
+			vkGetPhysicalDeviceProperties(m_PhysicalDevice, &deviceProperties);
+
+			std::cout << "Selected GPU:" << std::endl;
+			std::cout << "GPU Name: " << deviceProperties.deviceName << std::endl;
+			std::cout << std::endl;
 #endif
 
 		}
