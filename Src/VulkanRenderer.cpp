@@ -1,4 +1,5 @@
 #include "VulkanRenderer.h"
+
 #include "Vertex.h"
 #include "VulkanLogicalDevice.h"
 #include "VulkanPhysicalDevice.h"
@@ -260,6 +261,17 @@ void MeowRenderer::Draw()
 
 void MeowRenderer::Release()
 {
+	m_SyncObjects->Cleanup();
+	m_CommandPool->Cleanup();
+	m_Pipeline->Cleanup();
+	m_RenderPass->Cleanup();
+
+	m_VertexBuffer->Cleanup();
+	m_IndexBuffer->Cleanup();
+
+	VulkanSwapchain::Get().Cleanup();
+	VulkanLogicalDevice::Get().Cleanup();
+	VulkanContext::Get().Cleanup();
 }
 
 void MeowRenderer::FlagFrameBufferResized()

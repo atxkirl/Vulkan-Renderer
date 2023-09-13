@@ -16,6 +16,7 @@ ________________________________________________________________________________
 
 #include "VulkanContext.h"
 #include "VulkanDebugger.h"
+#include "VulkanDefines.h"
 
 namespace Nya
 {

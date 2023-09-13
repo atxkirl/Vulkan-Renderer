@@ -20,7 +20,6 @@ class MeowRenderer
 
 	std::shared_ptr<Nya::VulkanRenderpass> m_RenderPass;
 	std::shared_ptr<Nya::VulkanPipeline> m_Pipeline;
-	//std::vector<std::shared_ptr<Nya::VulkanFramebuffer>> m_Framebuffers;
 
 	std::shared_ptr<Nya::VulkanCommandPool> m_CommandPool;
 	std::vector<std::shared_ptr<Nya::VulkanCommandBuffer>> m_CommandBuffers;
