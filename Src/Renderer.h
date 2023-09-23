@@ -48,9 +48,15 @@ struct Vertex
 
 struct UniformBufferObject
 {
-	glm::mat4 m_Model;
-	glm::mat4 m_View;
-	glm::mat4 m_Proj;
+	alignas(16) glm::mat4 m_Model;
+	alignas(16) glm::mat4 m_View;
+	alignas(16) glm::mat4 m_Proj;
+
+	//-- Alignments:
+	// - Scalars must aligned by N		(=4bytes given 32bit floats)
+	// - Vec2 must be aligned by 2N		(=8bytes)
+	// - Vec3/4 must be aligned by 4N	(=16bytes)
+	// - Mat4 must be aligned as Vec4	(=16bytes)
 };
 
 class Renderer
