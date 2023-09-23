@@ -1,12 +1,13 @@
 #include <iostream>
+
+#define USE_VER 0
+
 #include "Renderer.h"
 #include "VulkanRenderer.h"
 
-//#define USE_OLD
-
 int main()
 {
-#ifdef USE_OLD
+#if USE_VER == 0
 	try
 	{
 		Renderer renderer;
@@ -19,7 +20,7 @@ int main()
 		std::cerr << e.what() << std::endl;
 		return EXIT_FAILURE;
 	}
-#else
+#elif USE_VER == 1
 	try
 	{
 		MeowRenderer renderer;

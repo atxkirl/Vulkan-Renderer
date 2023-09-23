@@ -131,7 +131,6 @@ void MeowRenderer::RecordCommandBuffer(const VkCommandBuffer commandBuffer, cons
 	VkRenderPassBeginInfo renderPassInfo{};
 	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
 	renderPassInfo.renderPass = m_RenderPass->GetRenderPass();
-	//renderPassInfo.framebuffer = m_Framebuffers[imageIndex]->GetFramebuffer();
 	renderPassInfo.framebuffer = VulkanSwapchain::Get().GetSwapChainFramebuffers()[imageIndex];
 	renderPassInfo.renderArea.offset = { 0,0 };
 	renderPassInfo.renderArea.extent = VulkanSwapchain::Get().GetSwapChainImageExtents();

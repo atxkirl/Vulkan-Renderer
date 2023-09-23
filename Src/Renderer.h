@@ -3,8 +3,6 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/glm.hpp>
@@ -46,6 +44,13 @@ struct Vertex
 
 		return attributes;
 	}
+};
+
+struct UniformBufferObject
+{
+	glm::mat4 m_Model;
+	glm::mat4 m_View;
+	glm::mat4 m_Proj;
 };
 
 class Renderer
@@ -96,10 +101,15 @@ private:
 	VkQueue m_PresentQueue{};
 
 	VkRenderPass m_RenderPass{};
+
+	VkDescriptorSetLayout m_DescriptorSetLayout{};
+	VkDescriptorPool m_DescriptorPool{};					// Pool of descriptor sets.
+	std::vector<VkDescriptorSet> m_DescriptorSets;			// Descriptor sets for each frame.
+
 	VkPipelineLayout m_PipelineLayout{};
 	VkPipeline m_GraphicsPipeline{};
 
-	VkCommandPool m_CommandPool{};
+	VkCommandPool m_CommandPool{};							// Pool of command buffers.
 	std::vector<VkCommandBuffer> m_CommandBuffers;			// Command buffers for each frame.
 	std::vector<VkSemaphore> m_ImageAvailableSemaphores;	// Semaphores for each frame.
 	std::vector<VkSemaphore> m_RenderFinishedSemaphores;	// Semaphores for each frame.
@@ -111,6 +121,10 @@ private:
 
 	VkBuffer m_IndexBuffer{};
 	VkDeviceMemory m_IndexBufferMemory{};
+
+	std::vector<VkBuffer> m_UniformBuffers{};				// Need buffers for each inflight frame.
+	std::vector<VkDeviceMemory> m_UniformBuffersMemory;		// GPU memory for each buffer.
+	std::vector<void*> m_UniformBuffersMapped;				// Ptrs to write data to buffer.
 
 	// TESTING
 	std::vector<const char*> m_Extensions;
@@ -147,20 +161,29 @@ private:
 
 	//-- Vulkan initialization.
 	void CreateVulkanInstance();
+
 	void SelectPhysicalGPU();
 	void CreateLogicalDevice();
 	void CreateSurface();
 	void CreateSwapChain();
+
 	void CreateImageViews();
 	void CreateRenderPass();
+
+	void CreateDescriptorSetLayout();
+	void CreateDescriptorPool();
+	void CreateDescriptorSets();
+
 	void CreateGraphicsPipeline();
 	void CreateFramebuffers();
+
 	void CreateCommandPool();
 	void CreateCommandBuffers();
 	void CreateSyncObjects();
+
 	void CreateVertexBuffer();
 	void CreateIndexBuffer();
-
+	void CreateUniformBuffers();
 
 	//-- Vulkan Rendering!
 	void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
@@ -169,6 +192,9 @@ private:
 	//-- Buffer Stuffer.
 	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+
+	//-- Uniform Buffer.
+	void UpdateUniformBuffer(uint32_t currentFrame);
 
 	//-- Swap Chain Recreation.
 	void DestroySwapChain();

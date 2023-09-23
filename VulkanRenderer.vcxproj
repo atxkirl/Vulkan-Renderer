@@ -117,7 +117,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>$(SolutionDir)Libs\glfw\include;$(SolutionDir)Libs\glm;$(SolutionDir)Libs\vulkan\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(SolutionDir)Libs\glfw\include;$(SolutionDir)Libs\glm;$(SolutionDir)Libs\vulkan\Include;$(SolutionDir)Libs\imgui;$(SolutionDir)Libs\stb;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -170,6 +170,14 @@
     <ClInclude Include="Src\VulkanVertexBuffer.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="Libs\imgui\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="Libs\imgui\backends\imgui_impl_vulkan.cpp" />
+    <ClCompile Include="Libs\imgui\imgui.cpp" />
+    <ClCompile Include="Libs\imgui\imgui_demo.cpp" />
+    <ClCompile Include="Libs\imgui\imgui_draw.cpp" />
+    <ClCompile Include="Libs\imgui\imgui_tables.cpp" />
+    <ClCompile Include="Libs\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="Src\1111MP-App.h" />
     <ClCompile Include="Src\main.cpp" />
     <ClCompile Include="Src\Renderer.cpp" />
     <ClCompile Include="Src\Vertex.cpp" />

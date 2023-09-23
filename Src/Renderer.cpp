@@ -1,6 +1,13 @@
 #include "Renderer.h"
+
 #include <iostream>
 #include <algorithm>
+#include <chrono>
+
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "FileLoader.h"
 
@@ -115,6 +122,17 @@ void Renderer::Shutdown()
 	vkDestroyPipelineLayout(m_LogicalDevice, m_PipelineLayout, nullptr);
 	vkDestroyRenderPass(m_LogicalDevice, m_RenderPass, nullptr);
 
+	// Cleanup uniform buffers.
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	{
+		vkDestroyBuffer(m_LogicalDevice, m_UniformBuffers[i], nullptr);
+		vkFreeMemory(m_LogicalDevice, m_UniformBuffersMemory[i], nullptr);
+	}
+
+	// Cleanup descriptor set stuff.
+	vkDestroyDescriptorPool(m_LogicalDevice, m_DescriptorPool, nullptr);
+	vkDestroyDescriptorSetLayout(m_LogicalDevice, m_DescriptorSetLayout, nullptr);
+
 	// Cleanup swap-chains.
 	DestroySwapChain();
 
@@ -169,10 +187,8 @@ void Renderer::InitVulkan()
 	SetupDebugMessenger();
 	CreateSurface();
 
-	// Vulkan physical device.
+	// Vulkan device.
 	SelectPhysicalGPU();
-
-	// Vulkan logical device.
 	CreateLogicalDevice();
 
 	// Vulkan swapchain.
@@ -182,11 +198,18 @@ void Renderer::InitVulkan()
 	// Vulkan renderpass.
 	CreateRenderPass();
 
+	// Vulkan descriptor sets.
+	CreateUniformBuffers();
+	CreateDescriptorSetLayout();
+	CreateDescriptorPool();
+	CreateDescriptorSets();
+
 	// Vulkan graphics pipeline.
 	CreateGraphicsPipeline();
 
 	// Vulkan render objects.
 	CreateFramebuffers();
+	
 	CreateCommandPool();
 	CreateCommandBuffers();
 	CreateSyncObjects();
@@ -658,6 +681,78 @@ void Renderer::CreateRenderPass()
 		throw std::runtime_error("Failed to create render pass!");
 }
 
+void Renderer::CreateDescriptorSetLayout()
+{
+	VkDescriptorSetLayoutBinding uboLayoutBinding;
+	uboLayoutBinding.binding = 0; // This ubo is used in shader under (binding = 0)
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; // This ubo is used in shader as uniform buffer.
+	uboLayoutBinding.descriptorCount = 1;
+	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT; // This ubo is used in Vertex shader.
+	uboLayoutBinding.pImmutableSamplers = nullptr; // optional.
+
+	VkDescriptorSetLayoutCreateInfo layoutInfo{};
+	layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutInfo.bindingCount = 1;
+	layoutInfo.pBindings = &uboLayoutBinding;
+
+	if (vkCreateDescriptorSetLayout(m_LogicalDevice, &layoutInfo, nullptr, &m_DescriptorSetLayout) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create descriptor set layout!");
+}
+
+void Renderer::CreateDescriptorPool()
+{
+	VkDescriptorPoolSize poolSize{};
+	poolSize.type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSize.descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.poolSizeCount = 1;
+	poolInfo.pPoolSizes = &poolSize;
+	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+	if (vkCreateDescriptorPool(m_LogicalDevice, &poolInfo, nullptr, &m_DescriptorPool) != VK_SUCCESS)
+		throw std::runtime_error("Failed to create descriptor pool!");
+}
+
+void Renderer::CreateDescriptorSets()
+{
+	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, m_DescriptorSetLayout);
+
+	//-- Create descriptors sets.
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.descriptorPool = m_DescriptorPool; // Pool to allocate desc sets from.
+	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	allocInfo.pSetLayouts = layouts.data();
+
+	m_DescriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+	if (vkAllocateDescriptorSets(m_LogicalDevice, &allocInfo, m_DescriptorSets.data()) != VK_SUCCESS)
+		throw std::runtime_error("Failed to allocate descriptor sets!");
+
+	//-- Populate descriptors.
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	{
+		VkDescriptorBufferInfo bufferInfo{};
+		bufferInfo.buffer = m_UniformBuffers[i];
+		bufferInfo.offset = 0;
+		bufferInfo.range = sizeof(UniformBufferObject);
+
+		VkWriteDescriptorSet descriptorWrite{};
+		descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+		descriptorWrite.dstSet = m_DescriptorSets[i];
+		descriptorWrite.dstBinding = 0;
+		descriptorWrite.dstArrayElement = 0;
+		descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+		descriptorWrite.descriptorCount = 1;
+		descriptorWrite.pBufferInfo = &bufferInfo;	// For descriptors that refer to buffer data.
+		descriptorWrite.pImageInfo = nullptr;		// For descriptors that refer to image data.	[not used]
+		descriptorWrite.pTexelBufferView = nullptr; // For descriptors that refer to buffer views.	[not used]
+
+		vkUpdateDescriptorSets(m_LogicalDevice, 1, &descriptorWrite, 0, nullptr);
+	}
+}
+
 void Renderer::CreateGraphicsPipeline()
 {
 	//-- Shaders.
@@ -733,10 +828,10 @@ void Renderer::CreateGraphicsPipeline()
 	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
 	rasterizer.depthClampEnable = VK_FALSE;
 	rasterizer.rasterizerDiscardEnable = VK_FALSE;
-	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;	// VK_POLYGON_MODE_LINE, VK_POLYGON_MODE_POINT
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;			// VK_POLYGON_MODE_LINE, VK_POLYGON_MODE_POINT
 	rasterizer.lineWidth = 1.f;
-	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;	// Cull only BACK facing, FRONT facing, or BOTH
-	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE; // Orientation of front facing triangles.
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;			// Cull ONLY BACK facing, ONLY FRONT facing, or BOTH
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;	// Orientation of front facing triangles.
 	rasterizer.depthBiasEnable = VK_FALSE;
 	rasterizer.depthBiasConstantFactor = 0.f;		// Optional.
 	rasterizer.depthBiasClamp = 0.f;				// Optional.
@@ -786,10 +881,10 @@ void Renderer::CreateGraphicsPipeline()
 	//-- Create pipeline layout.
 	VkPipelineLayoutCreateInfo pipelineLayout{};
 	pipelineLayout.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-	pipelineLayout.setLayoutCount = 0;				// Optional.
-	pipelineLayout.pSetLayouts = nullptr;			// Optional.
-	pipelineLayout.pushConstantRangeCount = 0;		// Optional.
-	pipelineLayout.pPushConstantRanges = nullptr;	// Optional.
+	pipelineLayout.setLayoutCount = 1;						// We have 1 UBO descriptor set layout.
+	pipelineLayout.pSetLayouts = &m_DescriptorSetLayout;	// Reference desciptor set layout.
+	pipelineLayout.pushConstantRangeCount = 0;				// Optional.
+	pipelineLayout.pPushConstantRanges = nullptr;			// Optional.
 
 	if (vkCreatePipelineLayout(m_LogicalDevice, &pipelineLayout, nullptr, &m_PipelineLayout) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create pipeline layout!");
@@ -946,6 +1041,22 @@ void Renderer::CreateIndexBuffer()
 	vkDestroyBuffer(m_LogicalDevice, stagingBuffer, nullptr);
 	vkFreeMemory(m_LogicalDevice, stagingBufferMemory, nullptr);
 }
+
+void Renderer::CreateUniformBuffers()
+{
+	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+	// Need buffers and co. for each frame in flight.
+	m_UniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+	m_UniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+	m_UniformBuffersMapped.resize(MAX_FRAMES_IN_FLIGHT);
+
+	for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i)
+	{
+		CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_UniformBuffers[i], m_UniformBuffersMemory[i]);
+		vkMapMemory(m_LogicalDevice, m_UniformBuffersMemory[i], 0, bufferSize, 0, &m_UniformBuffersMapped[i]);
+	}
+}
 #pragma endregion
 
 #pragma region Vulkan Rendering.
@@ -998,10 +1109,14 @@ void Renderer::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	scissor.extent = m_SwapChainExtents;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	//vkCmdDraw(commandBuffer, static_cast<uint32_t>(Vertices.size()), 1, 0, 0); // Redundant, doesn't use index buffer.
+	// Bind current frame's descriptor set.
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_PipelineLayout, 0, 1, &m_DescriptorSets[m_CurrentFrame], 0, nullptr);
+	// Draw using index buffer.
 	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(Indices.size()), 1, 0, 0, 0);
+	// End render pass.
 	vkCmdEndRenderPass(commandBuffer);
 
+	// End command buffer recording.
 	if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS)
 		throw std::runtime_error("Failed to record command buffer!");
 }
@@ -1030,6 +1145,9 @@ void Renderer::DrawFrame()
 	//-- Recording the command buffer.
 	vkResetCommandBuffer(m_CommandBuffers[m_CurrentFrame], 0);
 	RecordCommandBuffer(m_CommandBuffers[m_CurrentFrame], imageIndex);
+
+	//-- Update uniform buffers.
+	UpdateUniformBuffer(m_CurrentFrame);
 
 	//-- Submit command buffer.
 	VkSemaphore waitSemaphores[] =
@@ -1151,6 +1269,22 @@ void Renderer::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize s
 
 	// Release command buffer.
 	vkFreeCommandBuffers(m_LogicalDevice, m_CommandPool, 1, &commandBuffer);
+}
+
+void Renderer::UpdateUniformBuffer(uint32_t currentFrame)
+{
+	static auto startTime = std::chrono::high_resolution_clock::now();
+	
+	auto currentTime = std::chrono::high_resolution_clock::now();
+	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+
+	UniformBufferObject ubo{};
+	ubo.m_Model = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f), glm::vec3(0.f, 0.f, 1.f));
+	ubo.m_View = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
+	ubo.m_Proj = glm::perspective(glm::radians(45.f), m_SwapChainExtents.width / (float)m_SwapChainExtents.height, 0.1f, 10.f);
+	ubo.m_Proj[1][1] *= -1; // Flip Y coordinates! Vulkan is opposite of OpenGL for y-axis.
+
+	memcpy(m_UniformBuffersMapped[currentFrame], &ubo, sizeof(ubo));
 }
 #pragma endregion
 
