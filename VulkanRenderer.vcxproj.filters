@@ -137,9 +137,6 @@
     <ClCompile Include="Src\VulkanVertexBuffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Src\1111MP-App.h">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Libs\imgui\imgui.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

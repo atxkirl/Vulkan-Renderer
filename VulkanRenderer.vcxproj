@@ -177,7 +177,6 @@
     <ClCompile Include="Libs\imgui\imgui_draw.cpp" />
     <ClCompile Include="Libs\imgui\imgui_tables.cpp" />
     <ClCompile Include="Libs\imgui\imgui_widgets.cpp" />
-    <ClCompile Include="Src\1111MP-App.h" />
     <ClCompile Include="Src\main.cpp" />
     <ClCompile Include="Src\Renderer.cpp" />
     <ClCompile Include="Src\Vertex.cpp" />
